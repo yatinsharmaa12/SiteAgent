@@ -13,6 +13,12 @@ TRACKING_PARAMS = {
     "fbclid",
 }
 
+VOLATILE_PARAMS = {
+    "token",
+    "session",
+    "sessionid",
+    "sid",
+}
 
 def normalize_url(url: str, base_url: str) -> Optional[str]:
     # Convert relative URL to absolute URL
@@ -62,9 +68,12 @@ def normalize_url(url: str, base_url: str) -> Optional[str]:
             else:
                 key, value = parameter, ""
 
-            if key.lower() not in TRACKING_PARAMS:
+            if (
+                key.lower() not in TRACKING_PARAMS
+                and key.lower() not in VOLATILE_PARAMS
+            ):
                 query_parts.append(
-                    f"{key}={value}" if value else key
+                f"{key}={value}" if value else key
                 )
 
     query = "&".join(query_parts)
