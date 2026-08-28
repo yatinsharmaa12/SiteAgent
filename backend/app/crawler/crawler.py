@@ -1,3 +1,4 @@
+import hashlib
 from collections import deque
 from urllib.parse import urlparse
 
@@ -7,6 +8,8 @@ from app.crawler.link_extractor import extract_links, normalize_url
 from app.crawler.url_registry import URLRegistry
 from app.models.page import CrawledPage
 from app.models.url import URLStatus
+from app.models.url_db import URL
+from app.repositories.page_repository import PageRepository
 
 
 async def crawl_site(
@@ -17,7 +20,6 @@ async def crawl_site(
     max_depth: int = 1,
 ) -> tuple[list[CrawledPage], URLRegistry]:
 
-    # Normalize the starting URL before doing anything with it
     normalized_start_url = normalize_url(
         start_url,
         start_url,
@@ -36,6 +38,8 @@ async def crawl_site(
         db=db,
         company_id=company_id,
     )
+
+    page_repository = PageRepository(db)
 
     pages = []
 
@@ -74,7 +78,9 @@ async def crawl_site(
         )
 
         try:
-            html = await fetch_page(current_url)
+            html, http_status = await fetch_page(
+                current_url
+            )
 
             title, content = parse_page(html)
 
@@ -84,12 +90,45 @@ async def crawl_site(
                 depth=current_depth + 1,
             )
 
+            content_hash = hashlib.sha256(
+                content.encode("utf-8")
+            ).hexdigest()
+
+            db_url = (
+                db.query(URL)
+                .filter(
+                    URL.company_id == company_id,
+                    URL.normalized_url == current_url,
+                )
+                .first()
+            )
+
+            if not db_url:
+                raise ValueError(
+                    f"URL record not found: {current_url}"
+                )
+
+            page_repository.create(
+                company_id=company_id,
+                url_id=db_url.id,
+                url=current_url,
+                title=title,
+                content=content,
+                http_status=http_status,
+                content_hash=content_hash,
+            )
+
         except Exception as error:
+
+            print(
+                f"CRAWL ERROR: {current_url} -> {error}"
+            )
 
             registry.update_status(
                 current_url,
                 URLStatus.FAILED,
                 str(error),
+                http_status=None,
             )
 
             continue
@@ -107,6 +146,7 @@ async def crawl_site(
         registry.update_status(
             current_url,
             URLStatus.CRAWLED,
+            http_status=http_status,
         )
 
         for link in links:

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -39,7 +40,7 @@ class URLRegistry:
 
         record = URL(
             company_id=self.company_id,
-            url=url,
+            url=normalized_url,
             normalized_url=normalized_url,
             status=status.value,
             depth=depth,
@@ -78,6 +79,7 @@ class URLRegistry:
         url: str,
         status: URLStatus,
         error: Optional[str] = None,
+        http_status: Optional[int] = None,
     ) -> None:
 
         normalized_url = normalize_url(url, url)
@@ -99,6 +101,13 @@ class URLRegistry:
 
         record.status = status.value
         record.last_error = error
+
+        if http_status is not None:
+            record.http_status = http_status
+
+        if status == URLStatus.CRAWLED:
+            record.last_crawled_at = datetime.utcnow()
+            record.crawl_count += 1
 
         self.db.commit()
 

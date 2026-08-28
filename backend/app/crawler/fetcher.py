@@ -1,12 +1,11 @@
 import httpx
 
 
-async def fetch_page(url: str) -> str:
+async def fetch_page(url: str) -> tuple[str, int]:
     async with httpx.AsyncClient(
         follow_redirects=True,
         timeout=10.0,
     ) as client:
         response = await client.get(url)
-        response.raise_for_status()
 
-        return response.text
+        return response.text, response.status_code
