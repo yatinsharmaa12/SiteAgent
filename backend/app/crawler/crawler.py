@@ -4,19 +4,25 @@ from urllib.parse import urlparse
 from app.crawler.fetcher import fetch_page
 from app.crawler.parser import parse_page
 from app.crawler.link_extractor import extract_links
+from app.crawler.url_registry import URLRegistry
 from app.models.page import CrawledPage
 from app.models.url import URLStatus
-from app.crawler.url_registry import URLRegistry
 
 
 async def crawl_site(
     start_url: str,
+    db,
+    company_id: int,
     max_pages: int = 5,
     max_depth: int = 1,
 ) -> tuple[list[CrawledPage], URLRegistry]:
 
     queue = deque([(start_url, 0)])
-    registry = URLRegistry()
+    registry = URLRegistry(
+        db=db,
+        company_id=company_id,
+    )
+
     pages = []
 
     start_domain = urlparse(start_url).hostname
@@ -45,7 +51,6 @@ async def crawl_site(
         if urlparse(current_url).hostname != start_domain:
             continue
 
-        # Don't crawl beyond the allowed depth
         if current_depth > max_depth:
             continue
 
@@ -90,7 +95,6 @@ async def crawl_site(
             URLStatus.CRAWLED,
         )
 
-        # Register discovered links
         for link in links:
 
             if registry.get(link):
@@ -105,15 +109,7 @@ async def crawl_site(
                 discovered_from=current_url,
             )
 
-            # Only crawl URLs within the allowed depth
             if next_depth <= max_depth:
-
-                print(
-                    f"DISCOVERED: {link} | "
-                    f"depth={next_depth} | "
-                    f"max_depth={max_depth}"
-                )
-
                 queue.append(
                     (link, next_depth)
                 )

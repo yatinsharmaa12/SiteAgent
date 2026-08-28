@@ -1,11 +1,15 @@
 from typing import Optional
 
+from sqlalchemy.orm import Session
+
 from app.models.url import URLRecord, URLStatus
+from app.models.url_db import URL
 
 
 class URLRegistry:
-    def __init__(self):
-        self._urls: dict[str, URLRecord] = {}
+    def __init__(self, db: Session, company_id: int):
+        self.db = db
+        self.company_id = company_id
 
     def add(
         self,
@@ -15,22 +19,48 @@ class URLRegistry:
         discovered_from: Optional[str] = None,
     ) -> URLRecord:
 
-        if url in self._urls:
-            return self._urls[url]
+        record = (
+            self.db.query(URL)
+            .filter(
+                URL.company_id == self.company_id,
+                URL.normalized_url == url,
+            )
+            .first()
+        )
 
-        record = URLRecord(
+        if record:
+            return self._to_record(record)
+
+        record = URL(
+            company_id=self.company_id,
             url=url,
-            status=status,
+            normalized_url=url,
+            status=status.value,
             depth=depth,
             discovered_from=discovered_from,
         )
 
-        self._urls[url] = record
+        self.db.add(record)
+        self.db.commit()
+        self.db.refresh(record)
 
-        return record
+        return self._to_record(record)
 
     def get(self, url: str) -> Optional[URLRecord]:
-        return self._urls.get(url)
+
+        record = (
+            self.db.query(URL)
+            .filter(
+                URL.company_id == self.company_id,
+                URL.normalized_url == url,
+            )
+            .first()
+        )
+
+        if not record:
+            return None
+
+        return self._to_record(record)
 
     def update_status(
         self,
@@ -39,16 +69,51 @@ class URLRegistry:
         error: Optional[str] = None,
     ) -> None:
 
-        record = self._urls.get(url)
+        record = (
+            self.db.query(URL)
+            .filter(
+                URL.company_id == self.company_id,
+                URL.normalized_url == url,
+            )
+            .first()
+        )
 
         if not record:
             return
 
-        record.status = status
-        record.error = error
+        record.status = status.value
+        record.last_error = error
+
+        self.db.commit()
 
     def all(self) -> list[URLRecord]:
-        return list(self._urls.values())
+
+        records = (
+            self.db.query(URL)
+            .filter(URL.company_id == self.company_id)
+            .all()
+        )
+
+        return [
+            self._to_record(record)
+            for record in records
+        ]
 
     def count(self) -> int:
-        return len(self._urls)
+
+        return (
+            self.db.query(URL)
+            .filter(URL.company_id == self.company_id)
+            .count()
+        )
+
+    @staticmethod
+    def _to_record(record: URL) -> URLRecord:
+
+        return URLRecord(
+            url=record.url,
+            status=URLStatus(record.status),
+            depth=record.depth,
+            discovered_from=record.discovered_from,
+            error=record.last_error,
+        )
