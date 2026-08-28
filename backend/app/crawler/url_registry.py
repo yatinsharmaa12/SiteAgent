@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.url import URLRecord, URLStatus
 from app.models.url_db import URL
+from app.crawler.link_extractor import normalize_url
 
 
 class URLRegistry:
@@ -19,11 +20,16 @@ class URLRegistry:
         discovered_from: Optional[str] = None,
     ) -> URLRecord:
 
+        normalized_url = normalize_url(url, url)
+
+        if not normalized_url:
+            raise ValueError(f"Invalid URL: {url}")
+
         record = (
             self.db.query(URL)
             .filter(
                 URL.company_id == self.company_id,
-                URL.normalized_url == url,
+                URL.normalized_url == normalized_url,
             )
             .first()
         )
@@ -34,7 +40,7 @@ class URLRegistry:
         record = URL(
             company_id=self.company_id,
             url=url,
-            normalized_url=url,
+            normalized_url=normalized_url,
             status=status.value,
             depth=depth,
             discovered_from=discovered_from,
@@ -48,11 +54,16 @@ class URLRegistry:
 
     def get(self, url: str) -> Optional[URLRecord]:
 
+        normalized_url = normalize_url(url, url)
+
+        if not normalized_url:
+            return None
+
         record = (
             self.db.query(URL)
             .filter(
                 URL.company_id == self.company_id,
-                URL.normalized_url == url,
+                URL.normalized_url == normalized_url,
             )
             .first()
         )
@@ -69,11 +80,16 @@ class URLRegistry:
         error: Optional[str] = None,
     ) -> None:
 
+        normalized_url = normalize_url(url, url)
+
+        if not normalized_url:
+            return
+
         record = (
             self.db.query(URL)
             .filter(
                 URL.company_id == self.company_id,
-                URL.normalized_url == url,
+                URL.normalized_url == normalized_url,
             )
             .first()
         )
