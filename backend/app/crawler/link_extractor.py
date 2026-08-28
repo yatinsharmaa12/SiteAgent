@@ -81,7 +81,11 @@ def normalize_url(url: str, base_url: str) -> Optional[str]:
     )
 
 
-def extract_links(html: str, base_url: str) -> list[str]:
+def extract_links(
+    html: str,
+    base_url: str,
+    depth: int = 0,
+) -> list[str]:
     soup = BeautifulSoup(html, "html.parser")
 
     base_domain = urlparse(base_url).hostname

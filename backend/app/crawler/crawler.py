@@ -12,9 +12,10 @@ from app.crawler.url_registry import URLRegistry
 async def crawl_site(
     start_url: str,
     max_pages: int = 5,
+    max_depth: int = 1,
 ) -> tuple[list[CrawledPage], URLRegistry]:
 
-    queue = deque([start_url])
+    queue = deque([(start_url, 0)])
     registry = URLRegistry()
     pages = []
 
@@ -28,7 +29,7 @@ async def crawl_site(
 
     while queue and len(pages) < max_pages:
 
-        current_url = queue.popleft()
+        current_url, current_depth = queue.popleft()
 
         record = registry.get(current_url)
 
@@ -44,6 +45,10 @@ async def crawl_site(
         if urlparse(current_url).hostname != start_domain:
             continue
 
+        # Don't crawl beyond the allowed depth
+        if current_depth > max_depth:
+            continue
+
         registry.update_status(
             current_url,
             URLStatus.CRAWLING,
@@ -57,6 +62,7 @@ async def crawl_site(
             links = extract_links(
                 html,
                 current_url,
+                depth=current_depth + 1,
             )
 
         except Exception as error:
@@ -84,18 +90,32 @@ async def crawl_site(
             URLStatus.CRAWLED,
         )
 
+        # Register discovered links
         for link in links:
 
             if registry.get(link):
                 continue
 
+            next_depth = current_depth + 1
+
             registry.add(
                 link,
                 status=URLStatus.QUEUED,
-                depth=record.depth + 1,
+                depth=next_depth,
                 discovered_from=current_url,
             )
 
-            queue.append(link)
+            # Only crawl URLs within the allowed depth
+            if next_depth <= max_depth:
+
+                print(
+                    f"DISCOVERED: {link} | "
+                    f"depth={next_depth} | "
+                    f"max_depth={max_depth}"
+                )
+
+                queue.append(
+                    (link, next_depth)
+                )
 
     return pages, registry

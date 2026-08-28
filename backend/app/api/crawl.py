@@ -17,6 +17,7 @@ async def crawl(request: CrawlRequest):
     pages, registry = await crawl_site(
         request.url,
         max_pages=5,
+        max_depth=1,
     )
 
     return {
