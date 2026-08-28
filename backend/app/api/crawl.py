@@ -13,9 +13,10 @@ class CrawlRequest(BaseModel):
 
 @router.post("")
 async def crawl(request: CrawlRequest):
+
     pages = await crawl_site(
         request.url,
-        max_pages=5
+        max_pages=5,
     )
 
     return {
