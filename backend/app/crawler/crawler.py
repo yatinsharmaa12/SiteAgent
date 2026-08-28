@@ -2,13 +2,17 @@ import hashlib
 from collections import deque
 from urllib.parse import urlparse
 
+from app.crawler.url_filter import is_crawlable_url
 from app.crawler.fetcher import fetch_page
 from app.crawler.parser import parse_page
 from app.crawler.link_extractor import extract_links, normalize_url
 from app.crawler.url_registry import URLRegistry
+from app.crawler.robots import RobotsChecker
+
 from app.models.page import CrawledPage
 from app.models.url import URLStatus
 from app.models.url_db import URL
+
 from app.repositories.page_repository import PageRepository
 
 
@@ -41,6 +45,9 @@ async def crawl_site(
 
     page_repository = PageRepository(db)
 
+    robots = RobotsChecker(start_url)
+    await robots.load()
+
     pages = []
 
     start_domain = urlparse(start_url).hostname
@@ -70,6 +77,14 @@ async def crawl_site(
             continue
 
         if current_depth > max_depth:
+            continue
+
+        # Respect robots.txt
+        if not robots.can_fetch(current_url):
+            registry.update_status(
+                current_url,
+                URLStatus.SKIPPED,
+            )
             continue
 
         registry.update_status(
@@ -150,6 +165,18 @@ async def crawl_site(
         )
 
         for link in links:
+
+            if not is_crawlable_url(link):
+                continue
+
+            if not robots.can_fetch(link):
+                registry.add(
+                    link,
+                    status=URLStatus.SKIPPED,
+                    depth=current_depth + 1,
+                    discovered_from=current_url,
+                )
+                continue
 
             if registry.get(link):
                 continue
