@@ -1,7 +1,9 @@
 import os
-import time
+
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
+
 
 load_dotenv()
 
@@ -11,24 +13,23 @@ class GeminiGenerator:
         api_key = os.getenv("GEMINI_API_KEY")
 
         if not api_key:
-            raise ValueError("GEMINI_API_KEY is not set")
+            raise ValueError(
+                "GEMINI_API_KEY is not set"
+            )
 
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(
+                timeout=30000,
+            ),
+        )
+
+        self.model = "gemini-3.6-flash"
 
     def generate(self, prompt: str) -> str:
-        for attempt in range(3):
-            try:
-                response = self.client.models.generate_content(
-                    model="gemini-3.7-flash",
-                    contents=prompt,
-                )
-
-                return response.text
-
-            except Exception:
-                if attempt == 2:
-                    raise
-
-                time.sleep(2 ** attempt)
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt,
+        )
 
         return response.text
