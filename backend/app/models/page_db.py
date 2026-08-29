@@ -16,12 +16,12 @@ class Page(Base):
     )
 
     company_id: Mapped[int] = mapped_column(
-        ForeignKey("companies.id"),
+        ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
     )
 
     url_id: Mapped[int] = mapped_column(
-        ForeignKey("urls.id"),
+        ForeignKey("urls.id", ondelete="CASCADE"),
         nullable=False,
     )
 

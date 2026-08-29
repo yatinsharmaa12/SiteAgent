@@ -23,6 +23,11 @@ class CompanyCreateRequest(BaseModel):
     website_url: str = Field(min_length=1, max_length=2048)
 
 
+class CompanyUpdateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    website_url: str = Field(min_length=1, max_length=2048)
+
+
 @router.post("")
 def create_company(
     request: CompanyCreateRequest,
@@ -65,6 +70,7 @@ def list_companies(
         for company in companies
     ]
 
+
 @router.get("/{company_id}")
 def get_company(
     company_id: int,
@@ -87,4 +93,62 @@ def get_company(
         "id": company.id,
         "name": company.name,
         "website_url": company.website_url,
+    }
+
+
+@router.put("/{company_id}")
+def update_company(
+    company_id: int,
+    request: CompanyUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    company = get_company_for_user(
+        db=db,
+        company_id=company_id,
+        user_id=current_user.id,
+    )
+
+    if not company:
+        raise HTTPException(
+            status_code=404,
+            detail="Company not found",
+        )
+
+    company.name = request.name
+    company.website_url = request.website_url
+
+    db.commit()
+    db.refresh(company)
+
+    return {
+        "id": company.id,
+        "name": company.name,
+        "website_url": company.website_url,
+    }
+
+@router.delete("/{company_id}")
+def delete_company(
+    company_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    company = get_company_for_user(
+        db=db,
+        company_id=company_id,
+        user_id=current_user.id,
+    )
+
+    if not company:
+        raise HTTPException(
+            status_code=404,
+            detail="Company not found",
+        )
+
+    db.delete(company)
+    db.commit()
+
+    return {
+        "message": "Company deleted successfully",
+        "company_id": company_id,
     }

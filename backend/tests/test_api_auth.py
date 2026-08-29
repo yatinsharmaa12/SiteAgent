@@ -28,3 +28,10 @@ def test_crawl_requires_authentication():
     )
 
     assert response.status_code == 401
+
+def test_delete_company_requires_authentication():
+    response = client.delete(
+        "/companies/12",
+    )
+
+    assert response.status_code == 401

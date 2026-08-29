@@ -16,7 +16,7 @@ class PageChunk(Base):
     )
 
     page_id: Mapped[int] = mapped_column(
-        ForeignKey("pages.id"),
+        ForeignKey("pages.id", ondelete="CASCADE"),
         nullable=False,
     )
 
