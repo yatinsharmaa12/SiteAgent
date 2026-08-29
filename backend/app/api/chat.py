@@ -13,8 +13,4 @@ class ChatRequest(BaseModel):
 
 @router.post("")
 def chat(request: ChatRequest):
-    answer = answer_question(request.question)
-
-    return {
-        "answer": answer,
-    }
+    return answer_question(request.question)
