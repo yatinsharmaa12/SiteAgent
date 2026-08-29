@@ -3,7 +3,12 @@ from app.ingestion.embedding import EmbeddingModel
 from app.models.page_chunk import PageChunk
 from app.models.page_db import Page
 
-def search_chunks(query: str, limit: int = 5):
+
+def search_chunks(
+    query: str,
+    company_id: int,
+    limit: int = 5,
+):
     embedder = EmbeddingModel()
     query_embedding = embedder.embed(query)
 
@@ -19,7 +24,13 @@ def search_chunks(query: str, limit: int = 5):
                     query_embedding
                 ).label("distance"),
             )
-            .join(Page, Page.id == PageChunk.page_id)
+            .join(
+                Page,
+                Page.id == PageChunk.page_id,
+            )
+            .filter(
+                Page.company_id == company_id
+            )
             .order_by(
                 PageChunk.embedding.cosine_distance(
                     query_embedding

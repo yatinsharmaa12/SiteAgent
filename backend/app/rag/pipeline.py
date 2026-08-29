@@ -4,8 +4,14 @@ from app.retrieval.context import build_context
 from app.retrieval.search import search_chunks
 
 
-def answer_question(question: str) -> dict:
-    results = search_chunks(question)
+def answer_question(
+    question: str,
+    company_id: int,
+) -> dict:
+    results = search_chunks(
+        question,
+        company_id=company_id,
+    )
 
     if not results:
         return {
