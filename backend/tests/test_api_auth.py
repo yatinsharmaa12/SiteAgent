@@ -20,9 +20,8 @@ def test_chat_requires_authentication():
 
 def test_crawl_requires_authentication():
     response = client.post(
-        "/crawl",
+        "/companies/12/crawl",
         json={
-            "url": "https://example.com",
             "max_pages": 1,
             "max_depth": 0,
         },
