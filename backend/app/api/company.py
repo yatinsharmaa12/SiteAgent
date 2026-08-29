@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -7,6 +7,7 @@ from app.db.session import get_db
 from app.models.company import Company
 from app.models.user import User
 from app.repositories.company_repository import (
+    get_company_for_user,
     list_companies_for_user,
 )
 
@@ -63,3 +64,27 @@ def list_companies(
         }
         for company in companies
     ]
+
+@router.get("/{company_id}")
+def get_company(
+    company_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    company = get_company_for_user(
+        db=db,
+        company_id=company_id,
+        user_id=current_user.id,
+    )
+
+    if not company:
+        raise HTTPException(
+            status_code=404,
+            detail="Company not found",
+        )
+
+    return {
+        "id": company.id,
+        "name": company.name,
+        "website_url": company.website_url,
+    }
