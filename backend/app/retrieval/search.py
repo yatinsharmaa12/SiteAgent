@@ -11,7 +11,12 @@ def search_chunks(query: str, limit: int = 5):
 
     try:
         results = (
-            db.query(PageChunk)
+            db.query(
+                PageChunk,
+                PageChunk.embedding.cosine_distance(
+                    query_embedding
+                ).label("distance"),
+            )
             .order_by(
                 PageChunk.embedding.cosine_distance(
                     query_embedding
