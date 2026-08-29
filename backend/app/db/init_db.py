@@ -1,5 +1,5 @@
 from app.db.database import Base, engine
-
+from app.models.page_chunk import PageChunk
 from app.models.company import Company
 from app.models.url_db import URL
 from app.models.page_db import Page
