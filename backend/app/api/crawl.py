@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.crawler.crawler import crawl_site
@@ -7,11 +7,26 @@ from app.db.session import get_db
 from app.models.company import Company
 
 
-router = APIRouter(prefix="/crawl", tags=["Crawler"])
+router = APIRouter(
+    prefix="/crawl",
+    tags=["Crawler"],
+)
 
 
 class CrawlRequest(BaseModel):
     url: str
+
+    max_pages: int = Field(
+        default=5,
+        ge=1,
+        le=100,
+    )
+
+    max_depth: int = Field(
+        default=1,
+        ge=0,
+        le=10,
+    )
 
 
 @router.post("")
@@ -21,7 +36,9 @@ async def crawl(
 ):
     company = (
         db.query(Company)
-        .filter(Company.website_url == request.url)
+        .filter(
+            Company.website_url == request.url
+        )
         .first()
     )
 
@@ -39,8 +56,8 @@ async def crawl(
         request.url,
         db=db,
         company_id=company.id,
-        max_pages=5,
-        max_depth=1,
+        max_pages=request.max_pages,
+        max_depth=request.max_depth,
     )
 
     return {

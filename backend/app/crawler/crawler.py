@@ -9,6 +9,9 @@ from app.crawler.link_extractor import extract_links, normalize_url
 from app.crawler.url_registry import URLRegistry
 from app.crawler.robots import RobotsChecker
 
+from app.ingestion.embedding import EmbeddingModel
+from app.ingestion.ingest import ingest_page
+
 from app.models.page import CrawledPage
 from app.models.url import URLStatus
 from app.models.url_db import URL
@@ -38,12 +41,18 @@ async def crawl_site(
 
     queue = deque([(start_url, 0)])
 
+    # URLs processed during THIS crawl only.
+    visited_this_crawl = set()
+
     registry = URLRegistry(
         db=db,
         company_id=company_id,
     )
 
     page_repository = PageRepository(db)
+
+    # Load embedding model once for the entire crawl.
+    embedder = EmbeddingModel()
 
     robots = RobotsChecker(start_url)
     await robots.load()
@@ -52,25 +61,35 @@ async def crawl_site(
 
     start_domain = urlparse(start_url).hostname
 
+    # Make sure the start URL is available for this crawl.
     registry.add(
         start_url,
         status=URLStatus.QUEUED,
         depth=0,
     )
 
+    registry.update_status(
+        start_url,
+        URLStatus.QUEUED,
+    )
+
     while queue and len(pages) < max_pages:
 
         current_url, current_depth = queue.popleft()
+
+        # Prevent loops within the current crawl.
+        if current_url in visited_this_crawl:
+            continue
+
+        visited_this_crawl.add(current_url)
 
         record = registry.get(current_url)
 
         if not record:
             continue
 
-        if record.status in {
-            URLStatus.CRAWLED,
-            URLStatus.INDEXED,
-        }:
+        # INDEXED means this URL should not be crawled.
+        if record.status == URLStatus.INDEXED:
             continue
 
         if urlparse(current_url).hostname != start_domain:
@@ -79,7 +98,7 @@ async def crawl_site(
         if current_depth > max_depth:
             continue
 
-        # Respect robots.txt
+        # Respect robots.txt.
         if not robots.can_fetch(current_url):
             registry.update_status(
                 current_url,
@@ -93,22 +112,37 @@ async def crawl_site(
         )
 
         try:
+            # -------------------------------------------------
+            # FETCH
+            # -------------------------------------------------
             html, http_status = await fetch_page(
                 current_url
             )
 
+            # -------------------------------------------------
+            # PARSE
+            # -------------------------------------------------
             title, content = parse_page(html)
 
+            # -------------------------------------------------
+            # EXTRACT LINKS
+            # -------------------------------------------------
             links = extract_links(
                 html,
                 current_url,
                 depth=current_depth + 1,
             )
 
+            # -------------------------------------------------
+            # CONTENT HASH
+            # -------------------------------------------------
             content_hash = hashlib.sha256(
                 content.encode("utf-8")
             ).hexdigest()
 
+            # -------------------------------------------------
+            # FIND URL RECORD
+            # -------------------------------------------------
             db_url = (
                 db.query(URL)
                 .filter(
@@ -123,15 +157,75 @@ async def crawl_site(
                     f"URL record not found: {current_url}"
                 )
 
-            page_repository.create(
+            # -------------------------------------------------
+            # CHECK WHETHER PAGE ALREADY EXISTS
+            # -------------------------------------------------
+            existing_page = page_repository.get_by_url(
                 company_id=company_id,
                 url_id=db_url.id,
-                url=current_url,
-                title=title,
-                content=content,
-                http_status=http_status,
-                content_hash=content_hash,
             )
+
+            # -------------------------------------------------
+            # NEW PAGE
+            # -------------------------------------------------
+            if existing_page is None:
+
+                page = page_repository.create(
+                    company_id=company_id,
+                    url_id=db_url.id,
+                    url=current_url,
+                    title=title,
+                    content=content,
+                    http_status=http_status,
+                    content_hash=content_hash,
+                )
+
+                ingest_page(
+                    page.id,
+                    db=db,
+                    embedder=embedder,
+                )
+
+                print(
+                    f"Created and ingested Page {page.id}"
+                )
+
+            # -------------------------------------------------
+            # EXISTING PAGE
+            # -------------------------------------------------
+            else:
+
+                page = existing_page
+
+                # Content changed.
+                if page.content_hash != content_hash:
+
+                    page_repository.update(
+                        page=page,
+                        title=title,
+                        content=content,
+                        http_status=http_status,
+                        content_hash=content_hash,
+                    )
+
+                    ingest_page(
+                        page.id,
+                        db=db,
+                        embedder=embedder,
+                        replace_existing=True,
+                    )
+
+                    print(
+                        f"Updated and re-ingested Page {page.id}"
+                    )
+
+                # Content unchanged.
+                else:
+
+                    print(
+                        f"Page {page.id} unchanged, "
+                        f"skipping ingestion"
+                    )
 
         except Exception as error:
 
@@ -148,7 +242,10 @@ async def crawl_site(
 
             continue
 
-        page = CrawledPage(
+        # -----------------------------------------------------
+        # SUCCESSFUL CRAWL RESULT
+        # -----------------------------------------------------
+        page_result = CrawledPage(
             url=current_url,
             title=title,
             content=content,
@@ -156,7 +253,7 @@ async def crawl_site(
             status="success",
         )
 
-        pages.append(page)
+        pages.append(page_result)
 
         registry.update_status(
             current_url,
@@ -164,21 +261,28 @@ async def crawl_site(
             http_status=http_status,
         )
 
+        # -----------------------------------------------------
+        # DISCOVER NEW LINKS
+        # -----------------------------------------------------
         for link in links:
 
             if not is_crawlable_url(link):
                 continue
 
             if not robots.can_fetch(link):
+
                 registry.add(
                     link,
                     status=URLStatus.SKIPPED,
                     depth=current_depth + 1,
                     discovered_from=current_url,
                 )
+
                 continue
 
-            if registry.get(link):
+            # Only skip if we already processed this URL
+            # during THIS crawl.
+            if link in visited_this_crawl:
                 continue
 
             next_depth = current_depth + 1

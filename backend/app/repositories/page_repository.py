@@ -10,6 +10,21 @@ class PageRepository:
     def __init__(self, db: Session):
         self.db = db
 
+    def get_by_url(
+        self,
+        company_id: int,
+        url_id: int,
+    ) -> Optional[Page]:
+
+        return (
+            self.db.query(Page)
+            .filter(
+                Page.company_id == company_id,
+                Page.url_id == url_id,
+            )
+            .first()
+        )
+
     def create(
         self,
         company_id: int,
@@ -33,6 +48,26 @@ class PageRepository:
         )
 
         self.db.add(page)
+        self.db.commit()
+        self.db.refresh(page)
+
+        return page
+
+    def update(
+        self,
+        page: Page,
+        title: str,
+        content: str,
+        http_status: Optional[int],
+        content_hash: str,
+    ) -> Page:
+
+        page.title = title
+        page.content = content
+        page.http_status = http_status
+        page.content_hash = content_hash
+        page.crawled_at = datetime.utcnow()
+
         self.db.commit()
         self.db.refresh(page)
 
