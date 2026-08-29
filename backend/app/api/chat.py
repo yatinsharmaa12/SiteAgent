@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
 from app.db.session import get_db
-from app.models.company import Company
 from app.models.user import User
 from app.rag.pipeline import answer_question
+from app.repositories.company_repository import get_company_for_user
 
 
 router = APIRouter(
@@ -26,13 +26,10 @@ def chat(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    company = (
-        db.query(Company)
-        .filter(
-            Company.id == request.company_id,
-            Company.owner_id == current_user.id,
-        )
-        .first()
+    company = get_company_for_user(
+        db=db,
+        company_id=request.company_id,
+        user_id=current_user.id,
     )
 
     if not company:

@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-
+from app.repositories.company_repository import get_company_for_user
 from app.core.dependencies import get_current_user
 from app.crawler.crawler import crawl_site
 from app.db.session import get_db
 from app.models.company import Company
 from app.models.user import User
-
+from app.repositories.company_repository import (
+    get_company_by_website_for_user,
+)
 
 router = APIRouter(
     prefix="/crawl",
@@ -37,13 +39,10 @@ async def crawl(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    company = (
-        db.query(Company)
-        .filter(
-            Company.website_url == request.url,
-            Company.owner_id == current_user.id,
-        )
-        .first()
+    company = get_company_by_website_for_user(
+        db=db,
+        website_url=request.url,
+        user_id=current_user.id,
     )
 
     if not company:
