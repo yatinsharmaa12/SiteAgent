@@ -9,17 +9,25 @@ def parse_page(html: str) -> tuple[str, str]:
 
     title = soup.title.get_text(strip=True) if soup.title else ""
 
-    text = soup.get_text(separator="\n")
+    content_lines = []
 
-    lines = [line.strip() for line in text.splitlines()]
-    lines = [line for line in lines if line]
+    for element in soup.find_all(
+        ["h1", "h2", "h3", "p", "li"]
+    ):
+        text = element.get_text(" ", strip=True)
 
-    cleaned_lines = []
+        if not text:
+            continue
 
-    for line in lines:
-        if not cleaned_lines or line != cleaned_lines[-1]:
-            cleaned_lines.append(line)
+        if element.name == "h1":
+            text = f"# {text}"
+        elif element.name == "h2":
+            text = f"## {text}"
+        elif element.name == "h3":
+            text = f"### {text}"
 
-    content = "\n".join(cleaned_lines)
+        content_lines.append(text)
+
+    content = "\n".join(content_lines)
 
     return title, content

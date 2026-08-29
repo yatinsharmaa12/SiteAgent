@@ -41,81 +41,76 @@ def chunk_text(
     overlap_tokens: int = 50,
 ) -> list[str]:
 
-    paragraphs = [
-        paragraph.strip()
-        for paragraph in text.splitlines()
-        if paragraph.strip()
+    lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip()
     ]
 
-    sentences = []
+    sections = []
+    current_section = []
 
-    for paragraph in paragraphs:
-        parts = re.split(
-            r"(?<=[.!?])\s+",
-            paragraph,
-        )
+    for line in lines:
+        if line.startswith("#"):
+            if current_section:
+                sections.append("\n".join(current_section))
 
-        for sentence in parts:
-            sentence = sentence.strip()
-
-            if not sentence:
-                continue
-
-            if token_count(sentence) <= chunk_size:
-                sentences.append(sentence)
-            else:
-                sentences.extend(
-                    split_long_sentence(
-                        sentence,
-                        chunk_size,
-                    )
-                )
-
-    chunks = []
-    current_sentences = []
-
-    for sentence in sentences:
-
-        candidate = " ".join(
-            current_sentences + [sentence]
-        )
-
-        if token_count(candidate) <= chunk_size:
-            current_sentences.append(sentence)
+            current_section = [line]
 
         else:
-            if current_sentences:
-                chunks.append(
-                    " ".join(current_sentences)
-                )
+            current_section.append(line)
 
-            # Build token-based overlap.
-            overlap_text = ""
+    if current_section:
+        sections.append("\n".join(current_section))
 
-            for previous in reversed(current_sentences):
-                candidate_overlap = (
-                    previous
-                    + " "
-                    + overlap_text
-                )
+    chunks = []
 
-                if token_count(candidate_overlap) > overlap_tokens:
-                    break
+    for section in sections:
+        sentences = []
 
-                overlap_text = candidate_overlap
+        for paragraph in section.splitlines():
+            parts = re.split(
+                r"(?<=[.!?])\s+",
+                paragraph,
+            )
 
-            current_sentences = []
+            for sentence in parts:
+                sentence = sentence.strip()
 
-            if overlap_text:
-                current_sentences.append(
-                    overlap_text
-                )
+                if not sentence:
+                    continue
 
-            current_sentences.append(sentence)
+                if token_count(sentence) <= chunk_size:
+                    sentences.append(sentence)
+                else:
+                    sentences.extend(
+                        split_long_sentence(
+                            sentence,
+                            chunk_size,
+                        )
+                    )
 
-    if current_sentences:
-        chunks.append(
-            " ".join(current_sentences)
-        )
+        current_sentences = []
+
+        for sentence in sentences:
+            candidate = " ".join(
+                current_sentences + [sentence]
+            )
+
+            if token_count(candidate) <= chunk_size:
+                current_sentences.append(sentence)
+
+            else:
+                if current_sentences:
+                    chunks.append(
+                        " ".join(current_sentences)
+                    )
+
+                current_sentences = [sentence]
+
+        if current_sentences:
+            chunks.append(
+                " ".join(current_sentences)
+            )
 
     return chunks
