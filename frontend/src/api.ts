@@ -1,6 +1,7 @@
 import type { ChatResponse, Company, CrawlJob } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
+const REQUEST_TIMEOUT_MS = 12000;
 
 export class ApiError extends Error {
   status: number;
@@ -15,7 +16,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError(408, "The API took too long to respond. Is the backend running on port 8000?");
+    }
+    throw new ApiError(503, "Unable to reach the API. Start the backend on port 8000 and try again.");
+  } finally {
+    window.clearTimeout(timeout);
+  }
   if (!response.ok) {
     let message = "Something went wrong. Please try again.";
     try {

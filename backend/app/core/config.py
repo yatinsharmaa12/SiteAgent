@@ -2,6 +2,8 @@ import os
 
 from dotenv import load_dotenv
 
+load_dotenv()
+
 
 MAX_RESPONSE_SIZE_BYTES = int(os.getenv("MAX_RESPONSE_SIZE_BYTES", "5000000"))  # 5 MiB
 REQUEST_CONNECT_TIMEOUT = float(os.getenv("REQUEST_CONNECT_TIMEOUT", "10"))

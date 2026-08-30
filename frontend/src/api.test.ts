@@ -36,4 +36,9 @@ describe("API contract", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ detail: "Invalid email or password" }), { status: 401 }));
     await expect(api.login("bad@example.com", "bad")).rejects.toEqual(expect.objectContaining({ status: 401, message: "Invalid email or password" } satisfies Partial<ApiError>));
   });
+
+  it("turns an unreachable backend into a useful connection error", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(api.login("person@acme.com", "secret")).rejects.toEqual(expect.objectContaining({ status: 503, message: expect.stringContaining("backend") }));
+  });
 });
