@@ -6,6 +6,7 @@ from app.core.dependencies import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.rag.pipeline import answer_question
+from app.rag.exceptions import LLMProviderError
 from app.repositories.company_repository import get_company_for_user
 
 
@@ -38,7 +39,13 @@ def chat(
             detail="Company not found",
         )
 
-    return answer_question(
-        question=request.question,
-        company_id=company.id,
-    )
+    try:
+        return answer_question(
+            question=request.question,
+            company_id=company.id,
+        )
+    except LLMProviderError:
+        raise HTTPException(
+            status_code=502,
+            detail="The language model provider is temporarily unavailable. Please try again.",
+        )

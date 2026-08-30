@@ -3,6 +3,7 @@ from unittest.mock import patch
 from app.rag.pipeline import answer_question
 from app.rag.prompt import build_prompt
 from app.retrieval.context import build_context
+from app.rag.exceptions import LLMProviderError
 
 
 class FakeChunk:
@@ -70,6 +71,26 @@ def test_answer_question_when_no_context():
     )
 
     assert result["sources"] == []
+
+
+def test_answer_question_preserves_provider_error_boundary():
+    with patch(
+        "app.rag.pipeline.search_chunks",
+        return_value=[
+            (FakeChunk("A supported fact."), "https://example.com", "Home", 0.2)
+        ],
+    ), patch("app.rag.pipeline.GeminiGenerator") as mock_generator:
+        mock_generator.return_value.generate.side_effect = LLMProviderError(
+            "provider unavailable",
+            provider_status_code=504,
+        )
+
+        try:
+            answer_question("What is this?", company_id=1)
+        except LLMProviderError as error:
+            assert error.provider_status_code == 504
+        else:
+            raise AssertionError("Provider errors must not be converted to answers")
 
 
 def test_answer_question_returns_answer_and_sources():
