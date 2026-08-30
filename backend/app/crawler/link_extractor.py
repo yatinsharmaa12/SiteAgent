@@ -53,8 +53,10 @@ def normalize_url(url: str, base_url: str) -> Optional[str]:
 
     # Normalize path
     path = parsed.path or "/"
-
-    if path != "/" and path.endswith("/"):
+    # Remove trailing slash for root path to keep URL without trailing slash
+    if path == "/":
+        path = ""
+    elif path.endswith("/"):
         path = path.rstrip("/")
 
     # Keep legitimate query parameters,

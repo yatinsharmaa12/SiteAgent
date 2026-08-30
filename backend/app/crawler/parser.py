@@ -29,5 +29,7 @@ def parse_page(html: str) -> tuple[str, str]:
         content_lines.append(text)
 
     content = "\n".join(content_lines)
-
+    if not content.strip():
+        # Fallback: return plain text stripped from HTML when no structured elements
+        content = soup.get_text(strip=True)
     return title, content

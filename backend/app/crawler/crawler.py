@@ -5,7 +5,8 @@ from typing import Optional
 from urllib.parse import urlparse
 from app.crawler.exceptions import RetryableCrawlError, CrawlCancelledError, ResourceLimitError, CrawlTimedOutError
 from app.crawler.url_filter import is_crawlable_url
-from app.crawler.fetcher import fetch_page
+from app.crawler.link_extractor import extract_links, normalize_url
+import app.crawler.fetcher as fetcher
 from app.crawler.parser import parse_page
 import asyncio
 from app.core.config import MAX_CRAWL_DURATION_SECONDS, DOMAIN_MIN_DELAY_SECONDS
@@ -271,7 +272,7 @@ async def crawl_site(
             # FETCH
             # -------------------------------------------------
 
-            html, http_status = await fetch_page(
+            html, http_status = await fetcher.fetch_page(
                 current_url
             )
 
