@@ -36,6 +36,17 @@ class URLRegistry:
         )
 
         if record:
+            # Update existing record's status and timestamps for incremental crawl
+            record.status = status.value
+            record.last_seen_at = datetime.utcnow()
+            record.last_error = None
+            # Preserve depth, discovered_from if already set; otherwise update
+            if depth is not None:
+                record.depth = depth
+            if discovered_from is not None:
+                record.discovered_from = discovered_from
+            self.db.commit()
+            self.db.refresh(record)
             return self._to_record(record)
 
         record = URL(
@@ -119,7 +130,7 @@ class URLRegistry:
             URL.company_id == self.company_id,
             URL.status != URLStatus.DEACTIVATED.value,
             (URL.last_seen_at < cutoff) | (URL.last_seen_at == None),
-        ).update({"status": URLStatus.DEACTIVATED.value})
+        ).update({"status": URLStatus.DEACTIVATED.value, "is_active": False})
         self.db.commit()
 
     def all(self) -> list[URLRecord]:

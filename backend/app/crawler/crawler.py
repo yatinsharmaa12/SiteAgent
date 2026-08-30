@@ -33,6 +33,7 @@ def update_crawl_progress(
         db.query(URL)
         .filter(
             URL.company_id == crawl_job.company_id,
+            URL.status != "deactivated",
         )
         .all()
     )
@@ -336,22 +337,29 @@ async def crawl_site(
             # -------------------------------------------------
 
             if existing_page is None:
+                try:
+                    page = page_repository.create(
+                        company_id=company_id,
+                        url_id=db_url.id,
+                        url=current_url,
+                        title=title,
+                        content=content,
+                        http_status=http_status,
+                        content_hash=content_hash,
+                        commit=False,
+                    )
 
-                page = page_repository.create(
-                    company_id=company_id,
-                    url_id=db_url.id,
-                    url=current_url,
-                    title=title,
-                    content=content,
-                    http_status=http_status,
-                    content_hash=content_hash,
-                )
+                    ingest_page(
+                        page.id,
+                        db=db,
+                        embedder=embedder,
+                        commit=False,
+                    )
 
-                ingest_page(
-                    page.id,
-                    db=db,
-                    embedder=embedder,
-                )
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                    raise
 
                 print(
                     f"Created and ingested Page {page.id}"
@@ -371,20 +379,28 @@ async def crawl_site(
 
                 if page.content_hash != content_hash:
 
-                    page_repository.update(
-                        page=page,
-                        title=title,
-                        content=content,
-                        http_status=http_status,
-                        content_hash=content_hash,
-                    )
+                    try:
+                        page_repository.update(
+                            page=page,
+                            title=title,
+                            content=content,
+                            http_status=http_status,
+                            content_hash=content_hash,
+                            commit=False,
+                        )
 
-                    ingest_page(
-                        page.id,
-                        db=db,
-                        embedder=embedder,
-                        replace_existing=True,
-                    )
+                        ingest_page(
+                            page.id,
+                            db=db,
+                            embedder=embedder,
+                            replace_existing=True,
+                            commit=False,
+                        )
+
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+                        raise
 
                     print(
                         f"Updated and re-ingested Page {page.id}"

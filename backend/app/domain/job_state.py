@@ -18,9 +18,7 @@ class InvalidStateTransition(Exception):
 VALID_TRANSITIONS = {
     JobState.QUEUED: {JobState.RUNNING, JobState.FAILED, JobState.CANCELLED},
     JobState.RUNNING: {JobState.COMPLETED, JobState.FAILED, JobState.QUEUED, JobState.CANCELLED},
-    JobState.COMPLETED: {JobState.RUNNING},  # allow re-running completed jobs
-
-
+    JobState.COMPLETED: {JobState.QUEUED},  # allow re-running completed jobs via QUEUED reset
 
     JobState.FAILED: set(),
     JobState.CANCELLED: set(),
@@ -38,6 +36,12 @@ def transition_job_state(job, new_status: str, error: str = None):
         )
         
     job.status = new_state.value
+
+    # Reset temporal fields when resetting to QUEUED to avoid stale data
+    if new_state == JobState.QUEUED:
+        job.started_at = None
+        job.completed_at = None
+        job.last_heartbeat_at = None
     
     if new_state == JobState.RUNNING:
         if current_status == JobState.QUEUED:

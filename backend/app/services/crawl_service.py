@@ -43,7 +43,7 @@ async def run_crawl_job(
 
         # If the job was previously completed, reset it to QUEUED before starting.
         if job.status == JobState.COMPLETED.value:
-            job.status = JobState.QUEUED.value
+            transition_job_state(job, JobState.QUEUED)
         transition_job_state(job, JobState.RUNNING)
 
         job.pages_discovered = 0

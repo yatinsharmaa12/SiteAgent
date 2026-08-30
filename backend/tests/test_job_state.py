@@ -77,3 +77,38 @@ def test_attempt_count_increments():
     # 4. Permanent failure does not incorrectly increment it.
     transition_job_state(job, JobState.FAILED, "Permanent error")
     assert job.attempt_count == 2
+
+
+def test_completed_to_queued_resets_temporal_fields():
+    """COMPLETED → QUEUED must clear started_at/completed_at/last_heartbeat_at
+    so a rerun starts with clean timestamps."""
+    from datetime import datetime
+
+    job = MockJob(JobState.QUEUED.value, attempt_count=0)
+    transition_job_state(job, JobState.RUNNING)
+    transition_job_state(job, JobState.COMPLETED)
+
+    assert job.started_at is not None
+    assert job.completed_at is not None
+    assert job.last_heartbeat_at is not None
+
+    # Reset for rerun
+    transition_job_state(job, JobState.QUEUED)
+    assert job.started_at is None
+    assert job.completed_at is None
+    assert job.last_heartbeat_at is None
+    assert job.status == JobState.QUEUED.value
+
+    # Rerun increments attempt_count again
+    transition_job_state(job, JobState.RUNNING)
+    assert job.attempt_count == 2
+    assert job.started_at is not None
+
+
+def test_terminal_states_cannot_transition():
+    """FAILED, CANCELLED and TIMED_OUT must be terminal — no outgoing edges."""
+    for terminal in (JobState.FAILED, JobState.CANCELLED, JobState.TIMED_OUT):
+        for target in JobState:
+            job = MockJob(terminal.value)
+            with pytest.raises(InvalidStateTransition):
+                transition_job_state(job, target)

@@ -34,6 +34,7 @@ class PageRepository:
         content: str,
         http_status: Optional[int],
         content_hash: str,
+        commit: bool = True,
     ) -> Page:
 
         page = Page(
@@ -48,7 +49,10 @@ class PageRepository:
         )
 
         self.db.add(page)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(page)
 
         return page
@@ -60,6 +64,7 @@ class PageRepository:
         content: str,
         http_status: Optional[int],
         content_hash: str,
+        commit: bool = True,
     ) -> Page:
 
         page.title = title
@@ -68,7 +73,10 @@ class PageRepository:
         page.content_hash = content_hash
         page.crawled_at = datetime.utcnow()
 
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         self.db.refresh(page)
 
         return page

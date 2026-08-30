@@ -12,75 +12,81 @@ def ingest_page(
     db: Session,
     embedder: EmbeddingModel,
     replace_existing: bool = False,
+    commit: bool = True,
 ):
-    page = (
-        db.query(Page)
-        .filter(Page.id == page_id)
-        .first()
-    )
-
-    if page is None:
-        raise ValueError(
-            f"Page {page_id} not found"
+    try:
+        page = (
+            db.query(Page)
+            .filter(Page.id == page_id)
+            .first()
         )
 
-    existing_chunks = (
-        db.query(PageChunk)
-        .filter(PageChunk.page_id == page.id)
-        .count()
-    )
+        if page is None:
+            raise ValueError(
+                f"Page {page_id} not found"
+            )
 
-    if existing_chunks > 0:
+        existing_chunks = (
+            db.query(PageChunk)
+            .filter(PageChunk.page_id == page.id)
+            .count()
+        )
 
-        if not replace_existing:
+        if existing_chunks > 0:
+
+            if not replace_existing:
+                print(
+                    f"Page {page.id} already ingested"
+                )
+                return
+
+            db.query(PageChunk).filter(
+                PageChunk.page_id == page.id
+            ).delete(
+                synchronize_session=False
+            )
+
             print(
-                f"Page {page.id} already ingested"
+                f"Removed {existing_chunks} old chunks "
+                f"from Page {page.id}"
+            )
+
+        cleaned = clean_text(page.content)
+
+        chunks = chunk_text(
+            cleaned,
+            chunk_size=500,
+        )
+
+        if not chunks:
+            print(
+                f"Page {page.id} contains no chunks"
             )
             return
 
-        db.query(PageChunk).filter(
-            PageChunk.page_id == page.id
-        ).delete(
-            synchronize_session=False
-        )
+        embeddings = embedder.embed_many(chunks)
 
-        db.commit()
+        for index, (chunk, embedding) in enumerate(
+            zip(chunks, embeddings)
+        ):
+            page_chunk = PageChunk(
+                page_id=page.id,
+                chunk_index=index,
+                content=chunk,
+                embedding=embedding,
+            )
+
+            db.add(page_chunk)
+
+        if commit:
+            db.commit()
+        else:
+            db.flush()
 
         print(
-            f"Removed {existing_chunks} old chunks "
-            f"from Page {page.id}"
+            f"Ingested Page {page.id}: "
+            f"{len(chunks)} chunks"
         )
-
-    cleaned = clean_text(page.content)
-
-    chunks = chunk_text(
-        cleaned,
-        chunk_size=500,
-    )
-
-    if not chunks:
-        print(
-            f"Page {page.id} contains no chunks"
-        )
-        return
-
-    embeddings = embedder.embed_many(chunks)
-
-    for index, (chunk, embedding) in enumerate(
-        zip(chunks, embeddings)
-    ):
-        page_chunk = PageChunk(
-            page_id=page.id,
-            chunk_index=index,
-            content=chunk,
-            embedding=embedding,
-        )
-
-        db.add(page_chunk)
-
-    db.commit()
-
-    print(
-        f"Ingested Page {page.id}: "
-        f"{len(chunks)} chunks"
-    )
+    except Exception:
+        db.rollback()
+        raise
