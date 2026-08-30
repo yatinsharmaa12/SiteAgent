@@ -11,6 +11,7 @@ class URLStatus(str, Enum):
     CRAWLED = "crawled"
     INDEXED = "indexed"
     FAILED = "failed"
+    DEACTIVATED = "deactivated"
 
 
 class URLRecord(BaseModel):

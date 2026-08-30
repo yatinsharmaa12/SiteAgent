@@ -101,6 +101,7 @@ class URLRegistry:
 
         record.status = status.value
         record.last_error = error
+        record.last_seen_at = datetime.utcnow()
 
         if http_status is not None:
             record.http_status = http_status
@@ -109,6 +110,14 @@ class URLRegistry:
             record.last_crawled_at = datetime.utcnow()
             record.crawl_count += 1
 
+        self.db.commit()
+
+    def deactivate_unseen(self, cutoff: datetime) -> None:
+        self.db.query(URL).filter(
+            URL.company_id == self.company_id,
+            URL.last_seen_at < cutoff,
+            URL.status != URLStatus.DEACTIVATED.value,
+        ).update({"status": URLStatus.DEACTIVATED.value})
         self.db.commit()
 
     def all(self) -> list[URLRecord]:

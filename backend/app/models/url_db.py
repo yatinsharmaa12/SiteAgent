@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -79,4 +79,14 @@ class URL(Base):
     last_error: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
+    )
+    # New fields for incremental crawl tracking
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
     )

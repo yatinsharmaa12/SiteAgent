@@ -399,6 +399,23 @@ async def crawl_site(
                         f"Page {page.id} unchanged, "
                         f"skipping ingestion"
                     )
+                    # Update URL status to reflect successful crawl of unchanged page
+                    registry.update_status(
+                        current_url,
+                        URLStatus.CRAWLED,
+                        http_status=http_status,
+                    )
+                    registry.update_status(
+                        current_url,
+                        URLStatus.INDEXED,
+                        http_status=http_status,
+                    )
+                    # Update job progress after unchanged page
+                    if crawl_job:
+                        update_crawl_progress(
+                            db,
+                            crawl_job,
+                        )
 
         # -------------------------------------------------
         # CRAWL ERROR
@@ -578,5 +595,8 @@ async def crawl_site(
             db,
             crawl_job,
         )
+
+    # Deactivate URLs not seen in this crawl (soft delete)
+    registry.deactivate_unseen(cutoff=crawl_start_time)
 
     return pages, registry
