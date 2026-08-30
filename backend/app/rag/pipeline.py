@@ -15,7 +15,7 @@ def answer_question(
 
     if not results:
         return {
-            "answer": "I don't have enough information to answer that.",
+            "answer": "The website does not provide enough information to answer that.",
             "sources": [],
         }
 
@@ -26,15 +26,13 @@ def answer_question(
     answer = generator.generate(prompt)
 
     sources = []
+    seen_urls = set()
 
     for chunk, url, title, distance in results:
-        source = {
-            "title": title,
-            "url": url,
-        }
-
-        if source not in sources:
-            sources.append(source)
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        sources.append({"title": title, "url": url})
 
     return {
         "answer": answer,

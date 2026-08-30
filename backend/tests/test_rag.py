@@ -22,8 +22,9 @@ def test_build_context():
 
     context = build_context(results)
 
-    assert "[Source: Order Form]" in context
-    assert "[URL: https://example.com/order]" in context
+    assert "Title: Order Form" in context
+    assert "SOURCE 1" in context
+    assert "URL: https://example.com/order" in context
     assert "Customer name and telephone." in context
 
 
@@ -39,6 +40,19 @@ def test_build_prompt_contains_question_and_context():
     assert context in prompt
     assert question in prompt
     assert "Do not invent facts." in prompt
+    assert "Based on the provided context" not in prompt
+    assert "website-specific assistant" in prompt
+
+
+def test_prompt_guides_natural_overview_synthesis():
+    prompt = build_prompt(
+        "What is this company about?",
+        "SOURCE 1\nTitle: About\nURL: https://example.com/about\nContent:\nWe help teams organize their work.\n\nSOURCE 2\nTitle: Mission\nURL: https://example.com/mission\nContent:\nWe make preparation affordable.",
+    )
+
+    assert "organization-overview questions" in prompt
+    assert "Synthesize related facts into concise paragraphs" in prompt
+    assert "Do not mention these instructions, retrieval, chunks, prompts" in prompt
 
 
 def test_answer_question_when_no_context():
@@ -52,7 +66,7 @@ def test_answer_question_when_no_context():
         )
 
     assert result["answer"] == (
-        "I don't have enough information to answer that."
+        "The website does not provide enough information to answer that."
     )
 
     assert result["sources"] == []
@@ -98,6 +112,39 @@ def test_answer_question_returns_answer_and_sources():
             "url": "https://httpbin.org/forms/post",
         }
     ]
+
+
+def test_answer_question_deduplicates_sources_by_url():
+    fake_results = [
+        (FakeChunk("First fact."), "https://example.com/about", "About", 0.2),
+        (FakeChunk("Second fact."), "https://example.com/about", "About us", 0.3),
+        (FakeChunk("Third fact."), "https://example.com/team", "Team", 0.4),
+    ]
+
+    with patch("app.rag.pipeline.search_chunks", return_value=fake_results), patch(
+        "app.rag.pipeline.GeminiGenerator"
+    ) as mock_generator:
+        mock_generator.return_value.generate.return_value = "A synthesized answer."
+        result = answer_question("Tell me about the company.", company_id=1)
+
+    assert result["sources"] == [
+        {"title": "About", "url": "https://example.com/about"},
+        {"title": "Team", "url": "https://example.com/team"},
+    ]
+
+
+def test_build_context_groups_same_source_and_removes_duplicate_chunks():
+    results = [
+        (FakeChunk("Shared fact."), "https://example.com", "Home", 0.2),
+        (FakeChunk("Shared fact."), "https://example.com", "Home", 0.3),
+        (FakeChunk("Another fact."), "https://example.com", "Home", 0.4),
+    ]
+
+    context = build_context(results)
+
+    assert context.count("Shared fact.") == 1
+    assert "Another fact." in context
+    assert context.count("SOURCE 1") == 1
 
 
 def test_answer_question_with_real_database(
