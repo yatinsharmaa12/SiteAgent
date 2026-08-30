@@ -1,14 +1,17 @@
+from datetime import datetime
 import hashlib
 from collections import deque
 from typing import Optional
 from urllib.parse import urlparse
-
+from app.crawler.exceptions import RetryableCrawlError, CrawlCancelledError, ResourceLimitError, CrawlTimedOutError
 from app.crawler.url_filter import is_crawlable_url
 from app.crawler.fetcher import fetch_page
 from app.crawler.parser import parse_page
-from app.crawler.link_extractor import extract_links, normalize_url
+import asyncio
+from app.core.config import MAX_CRAWL_DURATION_SECONDS, DOMAIN_MIN_DELAY_SECONDS
 from app.crawler.url_registry import URLRegistry
 from app.crawler.robots import RobotsChecker
+from app.domain.job_state import JobState
 
 from app.ingestion.embedding import EmbeddingModel
 from app.ingestion.ingest import ingest_page
@@ -55,6 +58,15 @@ def update_crawl_progress(
         for url in urls
         if url.status == "failed"
     )
+
+    now = datetime.utcnow()
+    if not crawl_job.last_heartbeat_at or (now - crawl_job.last_heartbeat_at).total_seconds() > 15:
+        # Check if the job has been externally cancelled
+        current_status = db.query(CrawlJob.status).filter(CrawlJob.id == crawl_job.id).scalar()
+        if current_status == JobState.CANCELLED.value:
+            raise CrawlCancelledError("Crawl job was cancelled by user")
+            
+        crawl_job.last_heartbeat_at = now
 
     db.commit()
 
@@ -151,6 +163,9 @@ async def crawl_site(
     # -------------------------------------------------
     # MAIN CRAWL LOOP
     # -------------------------------------------------
+    # Initialize per-domain throttle and overall duration tracking
+    last_request_at: dict[str, datetime] = {}
+    crawl_start_time = datetime.utcnow()
 
     while queue and len(pages) < max_pages:
 
@@ -162,6 +177,18 @@ async def crawl_site(
 
         if current_url in visited_this_crawl:
             continue
+
+        # -------------------------------------------------
+        # DOMAIN RATE LIMITING
+        # -------------------------------------------------
+        host = urlparse(current_url).hostname
+        now = datetime.utcnow()
+        last_at = last_request_at.get(host)
+        if last_at:
+            elapsed = (now - last_at).total_seconds()
+            if elapsed < DOMAIN_MIN_DELAY_SECONDS:
+                await asyncio.sleep(DOMAIN_MIN_DELAY_SECONDS - elapsed)
+        last_request_at[host] = datetime.utcnow()
 
         visited_this_crawl.add(
             current_url
@@ -197,6 +224,12 @@ async def crawl_site(
 
         if current_depth > max_depth:
             continue
+
+        # -------------------------------------------------
+        # MAX CRAWL DURATION CHECK
+        # -------------------------------------------------
+        if (datetime.utcnow() - crawl_start_time).total_seconds() > MAX_CRAWL_DURATION_SECONDS:
+            raise CrawlTimedOutError("Crawl job exceeded maximum duration")
 
         # -------------------------------------------------
         # ROBOTS CHECK
@@ -371,6 +404,15 @@ async def crawl_site(
         # CRAWL ERROR
         # -------------------------------------------------
 
+        except RetryableCrawlError:
+            raise
+        except ResourceLimitError as error:
+            # Permanent failure due to resource limit
+            transition_job_state(crawl_job, JobState.FAILED, str(error))
+            raise
+        except CrawlTimedOutError as error:
+            transition_job_state(crawl_job, JobState.TIMED_OUT, str(error))
+            raise
         except Exception as error:
 
             print(

@@ -60,6 +60,13 @@ class CrawlJob(Base):
         nullable=False,
     )
 
+    attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        server_default="0",
+    )
+
     error: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
@@ -72,6 +79,11 @@ class CrawlJob(Base):
     )
 
     started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    last_heartbeat_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime,
         nullable=True,
     )

@@ -55,3 +55,5 @@ typing-inspection==0.4.2
 typing_extensions==4.16.0
 urllib3==2.6.3
 uvicorn==0.39.0
+redis==7.0.1
+rq==2.8.0

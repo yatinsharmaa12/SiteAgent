@@ -36,7 +36,7 @@ def test_crawl_returns_queued_job():
             "app.api.company_crawl.create_crawl_job",
             return_value=job,
         ), patch(
-            "app.api.company_crawl.run_crawl_job",
+            "app.api.company_crawl.enqueue_crawl",
         ):
 
             response = client.post(

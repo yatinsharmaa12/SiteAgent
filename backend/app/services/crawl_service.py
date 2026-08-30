@@ -1,7 +1,9 @@
 from datetime import datetime
 
 from app.crawler.crawler import crawl_site
+from app.crawler.exceptions import RetryableCrawlError, CrawlCancelledError, ResourceLimitError, CrawlTimedOutError
 from app.db.database import SessionLocal
+from app.domain.job_state import JobState, transition_job_state
 from app.models.crawl_job import CrawlJob
 from app.repositories.company_repository import get_company
 
@@ -31,14 +33,15 @@ async def run_crawl_job(
         )
 
         if not company:
-            job.status = "FAILED"
-            job.error = "Company not found"
-            job.completed_at = datetime.utcnow()
+            transition_job_state(job, JobState.FAILED, "Company not found")
             db.commit()
             return
+            
+        if job.status == JobState.CANCELLED.value:
+            # Job was cancelled while sitting in the queue
+            return
 
-        job.status = "RUNNING"
-        job.started_at = datetime.utcnow()
+        transition_job_state(job, JobState.RUNNING)
 
         job.pages_discovered = 0
         job.pages_crawled = 0
@@ -59,17 +62,42 @@ async def run_crawl_job(
 
             job.pages_crawled = len(pages)
 
-            job.status = "COMPLETED"
-            job.completed_at = datetime.utcnow()
+            transition_job_state(job, JobState.COMPLETED)
 
             db.commit()
+
+        except CrawlCancelledError as error:
+            # Refresh to ensure we have the latest status (which should be CANCELLED)
+            db.refresh(job)
+            if job.status != JobState.CANCELLED.value:
+                transition_job_state(job, JobState.CANCELLED, str(error))
+                db.commit()
+            return
+
+        except RetryableCrawlError as error:
+            transition_job_state(job, JobState.QUEUED, str(error))
+            db.commit()
+            raise
 
         except Exception as error:
-            job.status = "FAILED"
-            job.error = str(error)
-            job.completed_at = datetime.utcnow()
-
-            db.commit()
-
+            db.refresh(job)
+            if job.status != JobState.CANCELLED.value:
+                transition_job_state(job, JobState.FAILED, str(error))
+                db.commit()
+            
     finally:
         db.close()
+
+
+def cancel_crawl_job(db, job_id: int, company_id: int) -> bool:
+    job = db.query(CrawlJob).filter(CrawlJob.id == job_id, CrawlJob.company_id == company_id).first()
+    if not job:
+        return False
+        
+    if job.status in {JobState.QUEUED.value, JobState.RUNNING.value}:
+        transition_job_state(job, JobState.CANCELLED, "Cancelled by user")
+        db.commit()
+        return True
+        
+    # Cannot cancel if already COMPLETED, FAILED, or CANCELLED
+    return False

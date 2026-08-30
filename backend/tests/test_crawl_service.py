@@ -12,6 +12,7 @@ async def test_run_crawl_job_completes():
     job = MagicMock()
     job.id = 99
     job.company_id = 12
+    job.status = "QUEUED"
     job.max_pages = 5
     job.max_depth = 1
 
@@ -65,6 +66,7 @@ async def test_run_crawl_job_marks_failed():
     job = MagicMock()
     job.id = 99
     job.company_id = 12
+    job.status = "QUEUED"
     job.max_pages = 5
     job.max_depth = 1
 

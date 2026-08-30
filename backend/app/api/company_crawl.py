@@ -1,17 +1,16 @@
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
 )
-from app.models.crawl_job import CrawlJob
 from pydantic import BaseModel, Field
-
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
 from app.db.session import get_db
 from app.models.user import User
+
+from app.queue.crawl_queue import enqueue_crawl
 
 from app.repositories.company_repository import (
     get_company_for_user,
@@ -23,10 +22,7 @@ from app.repositories.crawl_job_repository import (
     list_crawl_jobs_for_company,
 )
 
-from app.services.crawl_service import (
-    run_crawl_job,
-)
-
+from app.services.crawl_service import cancel_crawl_job
 
 router = APIRouter(
     prefix="/companies",
@@ -73,10 +69,9 @@ def crawl_job_response(job):
 
 
 @router.post("/{company_id}/crawl")
-async def crawl_company(
+def crawl_company(
     company_id: int,
     request: CrawlCompanyRequest,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(
         get_current_user
     ),
@@ -116,6 +111,32 @@ async def crawl_company(
         "start_url": company.website_url,
         "status": job.status,
     }
+
+
+@router.post("/{company_id}/crawl-jobs/{job_id}/cancel")
+def cancel_job(
+    company_id: int,
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    company = get_company_for_user(
+        db=db,
+        company_id=company_id,
+        user_id=current_user.id,
+    )
+
+    if not company:
+        raise HTTPException(
+            status_code=404,
+            detail="Company not found",
+        )
+
+    success = cancel_crawl_job(db, job_id, company.id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Job cannot be cancelled")
+
+    return {"message": "Job cancelled"}
 
 
 @router.get(

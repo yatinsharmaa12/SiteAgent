@@ -3,7 +3,14 @@ import os
 from dotenv import load_dotenv
 
 
-load_dotenv()
+MAX_RESPONSE_SIZE_BYTES = int(os.getenv("MAX_RESPONSE_SIZE_BYTES", "5000000"))  # 5 MiB
+REQUEST_CONNECT_TIMEOUT = float(os.getenv("REQUEST_CONNECT_TIMEOUT", "10"))
+REQUEST_READ_TIMEOUT = float(os.getenv("REQUEST_READ_TIMEOUT", "10"))
+REQUEST_WRITE_TIMEOUT = float(os.getenv("REQUEST_WRITE_TIMEOUT", "10"))
+REQUEST_POOL_TIMEOUT = float(os.getenv("REQUEST_POOL_TIMEOUT", "10"))
+MAX_CRAWL_DURATION_SECONDS = int(os.getenv("MAX_CRAWL_DURATION_SECONDS", "1800"))  # 30 min
+DOMAIN_MIN_DELAY_SECONDS = float(os.getenv("DOMAIN_MIN_DELAY_SECONDS", "1"))
+
 
 JWT_SECRET_KEY = os.environ["JWT_SECRET_KEY"]
 JWT_ALGORITHM = "HS256"

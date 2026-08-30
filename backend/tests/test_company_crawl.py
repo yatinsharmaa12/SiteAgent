@@ -7,12 +7,10 @@ from app.api.company_crawl import (
     get_crawl_job,
     list_crawl_jobs,
 )
-from app.services.crawl_service import run_crawl_job
 from app.models.user import User
 
 
-@pytest.mark.anyio
-async def test_company_owner_can_crawl():
+def test_company_owner_can_crawl():
     db = MagicMock()
 
     company = MagicMock()
@@ -40,17 +38,16 @@ async def test_company_owner_can_crawl():
     request.max_pages = 5
     request.max_depth = 1
 
-    background_tasks = MagicMock()
-
     with patch(
         "app.api.company_crawl.create_crawl_job",
         return_value=job,
-    ) as mock_create_job:
+    ) as mock_create_job, patch(
+        "app.api.company_crawl.enqueue_crawl"
+    ) as mock_enqueue:
 
-        result = await crawl_company(
+        result = crawl_company(
             company_id=12,
             request=request,
-            background_tasks=background_tasks,
             current_user=user,
             db=db,
         )
@@ -62,8 +59,7 @@ async def test_company_owner_can_crawl():
         max_depth=1,
     )
 
-    background_tasks.add_task.assert_called_once_with(
-        run_crawl_job,
+    mock_enqueue.assert_called_once_with(
         99,
         12,
     )
@@ -74,10 +70,8 @@ async def test_company_owner_can_crawl():
     assert result["start_url"] == "https://example.com"
     assert result["status"] == "QUEUED"
 
-@pytest.mark.anyio
-async def test_company_owner_cannot_crawl_unowned_company():
+def test_company_owner_cannot_crawl_unowned_company():
     db = MagicMock()
-    background_tasks = MagicMock()
     user = User(
         id=3,
         email="test@example.com",
@@ -93,10 +87,9 @@ async def test_company_owner_cannot_crawl_unowned_company():
         return_value=None,
     ):
         with pytest.raises(HTTPException) as error:
-            await crawl_company(
+            crawl_company(
                 company_id=1,
                 request=request,
-                background_tasks=background_tasks,
                 current_user=user,
                 db=db,
             )
