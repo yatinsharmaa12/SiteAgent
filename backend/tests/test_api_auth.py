@@ -35,3 +35,17 @@ def test_delete_company_requires_authentication():
     )
 
     assert response.status_code == 401
+
+def test_get_crawl_job_requires_authentication():
+    response = client.get(
+        "/companies/12/crawl-jobs/99",
+    )
+
+    assert response.status_code == 401
+
+def test_list_crawl_jobs_requires_authentication():
+    response = client.get(
+        "/companies/12/crawl-jobs",
+    )
+
+    assert response.status_code == 401

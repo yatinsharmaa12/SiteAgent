@@ -44,3 +44,15 @@ def get_company_by_website_for_user(
         )
         .first()
     )
+
+def get_company(
+    db: Session,
+    company_id: int,
+):
+    return (
+        db.query(Company)
+        .filter(
+            Company.id == company_id,
+        )
+        .first()
+    )

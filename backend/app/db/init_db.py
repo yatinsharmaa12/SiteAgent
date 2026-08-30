@@ -4,7 +4,7 @@ from app.models.company import Company
 from app.models.url_db import URL
 from app.models.page_db import Page
 from app.models.user import User
-
+from app.models.crawl_job import CrawlJob
 
 def init_db():
     Base.metadata.create_all(bind=engine)
