@@ -89,7 +89,6 @@ def normalize_url(url: str, base_url: str) -> Optional[str]:
         )
     )
 
-
 def extract_links(
     html: str,
     base_url: str,
@@ -99,20 +98,33 @@ def extract_links(
 
     base_domain = urlparse(base_url).hostname
 
+    if not base_domain:
+        return []
+
+    base_domain = base_domain.lower()
+
     discovered_urls = set()
 
     for tag in soup.find_all("a", href=True):
         href = tag["href"].strip()
 
-        normalized_url = normalize_url(href, base_url)
+        if not href:
+            continue
+
+        normalized_url = normalize_url(
+            href,
+            base_url,
+        )
 
         if not normalized_url:
             continue
 
         parsed = urlparse(normalized_url)
 
-        # Same-domain only
-        if parsed.hostname != base_domain:
+        if not parsed.hostname:
+            continue
+
+        if parsed.hostname.lower() != base_domain:
             continue
 
         discovered_urls.add(normalized_url)

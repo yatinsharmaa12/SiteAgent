@@ -1,17 +1,31 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+)
+from app.models.crawl_job import CrawlJob
 from pydantic import BaseModel, Field
+
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.repositories.company_repository import get_company_for_user
+
+from app.repositories.company_repository import (
+    get_company_for_user,
+)
+
 from app.repositories.crawl_job_repository import (
     create_crawl_job,
     get_crawl_job_for_company,
     list_crawl_jobs_for_company,
 )
-from app.services.crawl_service import run_crawl_job
+
+from app.services.crawl_service import (
+    run_crawl_job,
+)
 
 
 router = APIRouter(
@@ -21,6 +35,7 @@ router = APIRouter(
 
 
 class CrawlCompanyRequest(BaseModel):
+
     max_pages: int = Field(
         default=5,
         ge=1,
@@ -34,14 +49,42 @@ class CrawlCompanyRequest(BaseModel):
     )
 
 
+def crawl_job_response(job):
+
+    return {
+        "job_id": job.id,
+        "company_id": job.company_id,
+        "status": job.status,
+
+        "max_pages": job.max_pages,
+        "max_depth": job.max_depth,
+
+        "pages_discovered": job.pages_discovered,
+        "pages_crawled": job.pages_crawled,
+        "pages_indexed": job.pages_indexed,
+        "pages_failed": job.pages_failed,
+
+        "error": job.error,
+
+        "created_at": job.created_at,
+        "started_at": job.started_at,
+        "completed_at": job.completed_at,
+    }
+
+
 @router.post("/{company_id}/crawl")
 async def crawl_company(
     company_id: int,
     request: CrawlCompanyRequest,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(
+        get_db
+    ),
 ):
+
     company = get_company_for_user(
         db=db,
         company_id=company_id,
@@ -61,8 +104,7 @@ async def crawl_company(
         max_depth=request.max_depth,
     )
 
-    background_tasks.add_task(
-        run_crawl_job,
+    enqueue_crawl(
         job.id,
         company.id,
     )
@@ -76,13 +118,20 @@ async def crawl_company(
     }
 
 
-@router.get("/{company_id}/crawl-jobs/{job_id}")
+@router.get(
+    "/{company_id}/crawl-jobs/{job_id}"
+)
 def get_crawl_job(
     company_id: int,
     job_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(
+        get_db
+    ),
 ):
+
     company = get_company_for_user(
         db=db,
         company_id=company_id,
@@ -107,26 +156,22 @@ def get_crawl_job(
             detail="Crawl job not found",
         )
 
-    return {
-        "job_id": job.id,
-        "company_id": job.company_id,
-        "status": job.status,
-        "max_pages": job.max_pages,
-        "max_depth": job.max_depth,
-        "pages_crawled": job.pages_crawled,
-        "error": job.error,
-        "created_at": job.created_at,
-        "started_at": job.started_at,
-        "completed_at": job.completed_at,
-    }
+    return crawl_job_response(job)
 
 
-@router.get("/{company_id}/crawl-jobs")
+@router.get(
+    "/{company_id}/crawl-jobs"
+)
 def list_crawl_jobs(
     company_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(
+        get_db
+    ),
 ):
+
     company = get_company_for_user(
         db=db,
         company_id=company_id,
@@ -145,17 +190,6 @@ def list_crawl_jobs(
     )
 
     return [
-        {
-            "job_id": job.id,
-            "company_id": job.company_id,
-            "status": job.status,
-            "max_pages": job.max_pages,
-            "max_depth": job.max_depth,
-            "pages_crawled": job.pages_crawled,
-            "error": job.error,
-            "created_at": job.created_at,
-            "started_at": job.started_at,
-            "completed_at": job.completed_at,
-        }
+        crawl_job_response(job)
         for job in jobs
     ]

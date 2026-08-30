@@ -52,6 +52,7 @@ async def test_run_crawl_job_completes():
         company_id=12,
         max_pages=5,
         max_depth=1,
+        crawl_job=job,
     )
 
     db.commit.assert_called()

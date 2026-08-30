@@ -16,7 +16,10 @@ def create_crawl_job(
         status="QUEUED",
         max_pages=max_pages,
         max_depth=max_depth,
+        pages_discovered=0,
         pages_crawled=0,
+        pages_indexed=0,
+        pages_failed=0,
         created_at=datetime.utcnow(),
     )
 

@@ -4,7 +4,7 @@ from app.models.page_chunk import PageChunk
 from app.models.page_db import Page
 
 
-DEFAULT_MAX_DISTANCE = 0.80
+DEFAULT_MAX_DISTANCE = 0.90
 
 
 def search_chunks(

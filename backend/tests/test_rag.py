@@ -1,8 +1,8 @@
-from app.rag.prompt import build_prompt
-from app.retrieval.context import build_context
 from unittest.mock import patch
 
 from app.rag.pipeline import answer_question
+from app.rag.prompt import build_prompt
+from app.retrieval.context import build_context
 
 
 class FakeChunk:
@@ -40,6 +40,7 @@ def test_build_prompt_contains_question_and_context():
     assert question in prompt
     assert "Do not invent facts." in prompt
 
+
 def test_answer_question_when_no_context():
     with patch(
         "app.rag.pipeline.search_chunks",
@@ -53,7 +54,9 @@ def test_answer_question_when_no_context():
     assert result["answer"] == (
         "I don't have enough information to answer that."
     )
+
     assert result["sources"] == []
+
 
 def test_answer_question_returns_answer_and_sources():
     fake_chunk = FakeChunk(
@@ -93,5 +96,197 @@ def test_answer_question_returns_answer_and_sources():
         {
             "title": "Order Form",
             "url": "https://httpbin.org/forms/post",
+        }
+    ]
+
+
+def test_answer_question_with_real_database(
+    db,
+    test_session_local,
+):
+    from app.models.company import Company
+    from app.models.page_db import Page
+    from app.models.page_chunk import PageChunk
+    from app.models.url_db import URL
+    from app.models.user import User
+    from app.ingestion.embedding import EmbeddingModel
+
+    # -------------------------------------------------
+    # USER
+    # -------------------------------------------------
+
+    user = User(
+        email="rag-integration@example.com",
+        password_hash="unused",
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    # -------------------------------------------------
+    # COMPANY
+    # -------------------------------------------------
+
+    company = Company(
+        name="RAG Integration Company",
+        website_url="https://example.com",
+        owner_id=user.id,
+    )
+
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+
+    # -------------------------------------------------
+    # URL
+    # -------------------------------------------------
+
+    url = URL(
+        company_id=company.id,
+        url="https://example.com",
+        normalized_url="https://example.com",
+        status="CRAWLED",
+        depth=0,
+    )
+
+    db.add(url)
+    db.commit()
+    db.refresh(url)
+
+    # -------------------------------------------------
+    # PAGE
+    # -------------------------------------------------
+
+    page = Page(
+        company_id=company.id,
+        url_id=url.id,
+        url="https://example.com",
+        title="Pricing",
+        content="Our company offers three pricing plans.",
+        http_status=200,
+        content_hash="test-hash-rag",
+    )
+
+    db.add(page)
+    db.commit()
+    db.refresh(page)
+
+    # -------------------------------------------------
+    # EMBEDDING
+    # -------------------------------------------------
+
+    embedder = EmbeddingModel()
+
+    query = "How many pricing plans are offered?"
+
+    embedding = embedder.embed(query)
+
+    # -------------------------------------------------
+    # PAGE CHUNK
+    # -------------------------------------------------
+
+    chunk = PageChunk(
+        page_id=page.id,
+        chunk_index=0,
+        content="Our company offers three pricing plans.",
+        embedding=embedding,
+    )
+
+    db.add(chunk)
+    db.commit()
+    db.refresh(chunk)
+
+    # -------------------------------------------------
+    # DEBUG VECTOR DISTANCE
+    # -------------------------------------------------
+
+    query_embedding = embedder.embed(query)
+
+    distance_expression = PageChunk.embedding.cosine_distance(
+        query_embedding
+    )
+
+    row = (
+        db.query(
+            PageChunk,
+            distance_expression.label("distance"),
+        )
+        .filter(PageChunk.id == chunk.id)
+        .first()
+    )
+
+    assert row is not None
+
+    print()
+    print("========================================")
+    print("RAG INTEGRATION DEBUG")
+    print("Company ID:", company.id)
+    print("Page ID:", page.id)
+    print("Chunk ID:", chunk.id)
+    print("Distance:", row.distance)
+    print("========================================")
+    print()
+
+    # -------------------------------------------------
+    # VERIFY SEARCH DIRECTLY
+    # -------------------------------------------------
+
+    with patch(
+        "app.retrieval.search.SessionLocal",
+        test_session_local,
+    ), patch(
+        "app.retrieval.search.EmbeddingModel"
+    ) as mock_embedding_model:
+
+        mock_embedding_model.return_value.embed.return_value = (
+            embedding
+        )
+
+        from app.retrieval.search import search_chunks
+
+        search_results = search_chunks(
+            query,
+            company_id=company.id,
+        )
+
+    print()
+    print("SEARCH RESULTS:", search_results)
+    print()
+
+    assert len(search_results) == 1
+
+    # -------------------------------------------------
+    # MOCK GEMINI ONLY
+    # -------------------------------------------------
+
+    with patch(
+        "app.rag.pipeline.search_chunks",
+        return_value=search_results,
+    ), patch(
+        "app.rag.pipeline.GeminiGenerator"
+    ) as mock_generator:
+
+        mock_generator.return_value.generate.return_value = (
+            "The company offers three pricing plans."
+        )
+
+        result = answer_question(
+            question=query,
+            company_id=company.id,
+        )
+
+    # -------------------------------------------------
+    # ASSERT RAG RESULT
+    # -------------------------------------------------
+
+    assert result["answer"] == (
+        "The company offers three pricing plans."
+    )
+
+    assert result["sources"] == [
+        {
+            "title": "Pricing",
+            "url": "https://example.com",
         }
     ]

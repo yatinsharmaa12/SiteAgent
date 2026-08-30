@@ -36,7 +36,25 @@ class CrawlJob(Base):
         nullable=False,
     )
 
+    pages_discovered: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
     pages_crawled: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    pages_indexed: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    pages_failed: Mapped[int] = mapped_column(
         Integer,
         default=0,
         nullable=False,

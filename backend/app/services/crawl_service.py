@@ -39,6 +39,12 @@ async def run_crawl_job(
 
         job.status = "RUNNING"
         job.started_at = datetime.utcnow()
+
+        job.pages_discovered = 0
+        job.pages_crawled = 0
+        job.pages_indexed = 0
+        job.pages_failed = 0
+
         db.commit()
 
         try:
@@ -48,10 +54,12 @@ async def run_crawl_job(
                 company_id=company.id,
                 max_pages=job.max_pages,
                 max_depth=job.max_depth,
+                crawl_job=job,
             )
 
-            job.status = "COMPLETED"
             job.pages_crawled = len(pages)
+
+            job.status = "COMPLETED"
             job.completed_at = datetime.utcnow()
 
             db.commit()
