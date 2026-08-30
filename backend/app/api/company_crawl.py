@@ -3,6 +3,7 @@ from fastapi import (
     Depends,
     HTTPException,
 )
+from datetime import datetime
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -46,6 +47,18 @@ class CrawlCompanyRequest(BaseModel):
 
 
 def crawl_job_response(job):
+    duration_seconds = None
+    if job.started_at is not None:
+        if job.completed_at is not None:
+            duration_seconds = max(
+                0.0,
+                (job.completed_at - job.started_at).total_seconds(),
+            )
+        elif job.status == "RUNNING":
+            duration_seconds = max(
+                0.0,
+                (datetime.utcnow() - job.started_at).total_seconds(),
+            )
 
     return {
         "job_id": job.id,
@@ -59,12 +72,17 @@ def crawl_job_response(job):
         "pages_crawled": job.pages_crawled,
         "pages_indexed": job.pages_indexed,
         "pages_failed": job.pages_failed,
+        "pages_new": job.pages_new,
+        "pages_changed": job.pages_changed,
+        "pages_unchanged": job.pages_unchanged,
+        "pages_deactivated": job.pages_deactivated,
 
         "error": job.error,
 
         "created_at": job.created_at,
         "started_at": job.started_at,
         "completed_at": job.completed_at,
+        "duration_seconds": duration_seconds,
     }
 
 

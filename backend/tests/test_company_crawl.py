@@ -1,4 +1,6 @@
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
@@ -131,6 +133,13 @@ def test_owner_can_view_crawl_job():
     job.created_at = None
     job.started_at = None
     job.completed_at = None
+    job.pages_discovered = 0
+    job.pages_indexed = 0
+    job.pages_failed = 0
+    job.pages_new = 0
+    job.pages_changed = 0
+    job.pages_unchanged = 0
+    job.pages_deactivated = 0
 
     user = User(
         id=3,
@@ -163,6 +172,48 @@ def test_owner_can_view_crawl_job():
     assert result["company_id"] == 12
     assert result["status"] == "COMPLETED"
     assert result["pages_crawled"] == 2
+    assert result["pages_new"] == 0
+    assert result["pages_changed"] == 0
+    assert result["pages_unchanged"] == 0
+    assert result["pages_deactivated"] == 0
+    assert result["duration_seconds"] is None
+
+
+def test_crawl_job_response_duration_for_completed_and_running_jobs():
+    completed = MagicMock()
+    completed.id = 1
+    completed.company_id = 2
+    completed.status = "COMPLETED"
+    completed.max_pages = 5
+    completed.max_depth = 1
+    completed.pages_discovered = 1
+    completed.pages_crawled = 1
+    completed.pages_indexed = 1
+    completed.pages_failed = 0
+    completed.pages_new = 1
+    completed.pages_changed = 0
+    completed.pages_unchanged = 0
+    completed.pages_deactivated = 0
+    completed.error = None
+    completed.created_at = None
+    completed.started_at = datetime(2026, 1, 1, 12, 0, 0)
+    completed.completed_at = completed.started_at + timedelta(seconds=12.5)
+
+    from app.api.company_crawl import crawl_job_response
+
+    assert crawl_job_response(completed)["duration_seconds"] == 12.5
+
+    running = SimpleNamespace(**{
+        "id": 1, "company_id": 2, "status": "RUNNING", "max_pages": 5,
+        "max_depth": 1, "pages_discovered": 1, "pages_crawled": 1,
+        "pages_indexed": 1, "pages_failed": 0, "pages_new": 1,
+        "pages_changed": 0, "pages_unchanged": 0, "pages_deactivated": 0,
+        "error": None, "created_at": None, "started_at": completed.started_at,
+        "completed_at": None,
+    })
+    with patch("app.api.company_crawl.datetime") as mocked_datetime:
+        mocked_datetime.utcnow.return_value = running.started_at + timedelta(seconds=3)
+        assert crawl_job_response(running)["duration_seconds"] == 3.0
 
 def test_crawl_job_not_found():
     db = MagicMock()

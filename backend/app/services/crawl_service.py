@@ -50,6 +50,10 @@ async def run_crawl_job(
         job.pages_crawled = 0
         job.pages_indexed = 0
         job.pages_failed = 0
+        job.pages_new = 0
+        job.pages_changed = 0
+        job.pages_unchanged = 0
+        job.pages_deactivated = 0
 
         db.commit()
 

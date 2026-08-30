@@ -60,6 +60,34 @@ class CrawlJob(Base):
         nullable=False,
     )
 
+    pages_new: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+
+    pages_changed: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+
+    pages_unchanged: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+
+    pages_deactivated: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+
     attempt_count: Mapped[int] = mapped_column(
         Integer,
         default=0,

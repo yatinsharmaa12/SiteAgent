@@ -38,6 +38,10 @@ async def test_run_crawl_job_completes_with_real_database(
         max_pages=5,
         max_depth=1,
         pages_crawled=0,
+        pages_new=7,
+        pages_changed=6,
+        pages_unchanged=5,
+        pages_deactivated=4,
     )
 
     db.add(job)
@@ -67,6 +71,10 @@ async def test_run_crawl_job_completes_with_real_database(
 
     assert updated_job.status == "COMPLETED"
     assert updated_job.pages_crawled == 1
+    assert updated_job.pages_new == 0
+    assert updated_job.pages_changed == 0
+    assert updated_job.pages_unchanged == 0
+    assert updated_job.pages_deactivated == 0
     assert updated_job.started_at is not None
     assert updated_job.completed_at is not None
     assert updated_job.error is None

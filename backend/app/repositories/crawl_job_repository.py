@@ -20,6 +20,10 @@ def create_crawl_job(
         pages_crawled=0,
         pages_indexed=0,
         pages_failed=0,
+        pages_new=0,
+        pages_changed=0,
+        pages_unchanged=0,
+        pages_deactivated=0,
         created_at=datetime.utcnow(),
     )
 

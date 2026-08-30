@@ -59,6 +59,10 @@ async def test_incremental_crawl_unchanged_content(db, test_session_local):
         await run_crawl_job(job_id=job.id, company_id=company.id)
 
     db.expire_all()
+    completed_job = db.query(CrawlJob).filter(CrawlJob.id == job.id).first()
+    assert completed_job.pages_new == 1
+    assert completed_job.pages_changed == 0
+    assert completed_job.pages_unchanged == 0
     page = db.query(Page).filter(Page.company_id == company.id).first()
     assert page is not None
     assert page.content == "content v1"
@@ -80,11 +84,33 @@ async def test_incremental_crawl_unchanged_content(db, test_session_local):
         await run_crawl_job(job_id=job.id, company_id=company.id)
 
     db.expire_all()
+    completed_job = db.query(CrawlJob).filter(CrawlJob.id == job.id).first()
+    assert completed_job.pages_new == 0
+    assert completed_job.pages_changed == 0
+    assert completed_job.pages_unchanged == 1
     page_count = db.query(Page).filter(Page.company_id == company.id).count()
     assert page_count == 1
     url_rec2 = get_url_record(db, company.id, "https://example.com")
     assert url_rec2.last_seen_at > first_seen
     assert url_rec2.status == URLStatus.INDEXED.value
+
+    async def mock_fetch_changed(url):
+        return "<html><body>content v2</body></html>", 200
+
+    with patch(
+        "app.services.crawl_service.SessionLocal", test_session_local
+    ), patch(
+        "app.services.crawl_service.get_company", return_value=company
+    ), patch(
+        "app.crawler.fetcher.fetch_page", new_callable=AsyncMock, side_effect=mock_fetch_changed
+    ):
+        await run_crawl_job(job_id=job.id, company_id=company.id)
+
+    db.expire_all()
+    completed_job = db.query(CrawlJob).filter(CrawlJob.id == job.id).first()
+    assert completed_job.pages_new == 0
+    assert completed_job.pages_changed == 1
+    assert completed_job.pages_unchanged == 0
 
 @pytest.mark.anyio
 async def test_deactivate_unseen_urls(db, test_session_local):
@@ -129,6 +155,8 @@ async def test_deactivate_unseen_urls(db, test_session_local):
     assert unused_url is not None
     assert unused_url.status == URLStatus.DEACTIVATED.value
     assert unused_url.is_active is False
+    completed_job = db.query(CrawlJob).filter(CrawlJob.id == job.id).first()
+    assert completed_job.pages_deactivated == 1
 
 
 @pytest.mark.anyio
@@ -201,6 +229,8 @@ async def test_failed_changed_page_reingest_rolls_back_previous_chunks(db, test_
     assert page is not None
     assert page.content == "content v1"
     assert db.query(PageChunk).filter(PageChunk.page_id == page.id).count() == 1
+    failed_job = db.query(CrawlJob).filter(CrawlJob.id == job.id).first()
+    assert failed_job.pages_changed == 0
 
     with patch("app.services.crawl_service.SessionLocal", test_session_local), patch(
         "app.services.crawl_service.get_company", return_value=company
@@ -217,6 +247,42 @@ async def test_failed_changed_page_reingest_rolls_back_previous_chunks(db, test_
 
     db.expire_all()
     page = db.query(Page).filter(Page.company_id == company.id).first()
-    assert page is not None
     assert page.content == "content v1"
     assert db.query(PageChunk).filter(PageChunk.page_id == page.id).count() == 1
+    failed_job = db.query(CrawlJob).filter(CrawlJob.id == job.id).first()
+    assert failed_job.pages_changed == 0
+
+
+@pytest.mark.anyio
+async def test_failed_fetch_does_not_increment_successful_statistics(db, test_session_local):
+    unique_suffix = uuid4().hex
+    user = User(email=f"fetch-test-{unique_suffix}@example.com", password_hash="unused")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    company = Company(name=f"Fetch Co {unique_suffix}", website_url="https://example.com", owner_id=user.id)
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+
+    job = CrawlJob(company_id=company.id, status="QUEUED", max_pages=1, max_depth=0)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    async def fetch_failure(_url):
+        raise RuntimeError("fetch failed")
+
+    with patch("app.services.crawl_service.SessionLocal", test_session_local), patch(
+        "app.services.crawl_service.get_company", return_value=company
+    ), patch(
+        "app.crawler.fetcher.fetch_page", new_callable=AsyncMock, side_effect=fetch_failure
+    ):
+        await run_crawl_job(job_id=job.id, company_id=company.id)
+
+    db.expire_all()
+    failed_job = db.query(CrawlJob).filter(CrawlJob.id == job.id).first()
+    assert failed_job.pages_new == 0
+    assert failed_job.pages_changed == 0
+    assert failed_job.pages_unchanged == 0

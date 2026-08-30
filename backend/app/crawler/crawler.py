@@ -364,6 +364,8 @@ async def crawl_site(
                 print(
                     f"Created and ingested Page {page.id}"
                 )
+                if crawl_job:
+                    crawl_job.pages_new += 1
 
             # -------------------------------------------------
             # EXISTING PAGE
@@ -405,6 +407,8 @@ async def crawl_site(
                     print(
                         f"Updated and re-ingested Page {page.id}"
                     )
+                    if crawl_job:
+                        crawl_job.pages_changed += 1
 
                 # -------------------------------------------------
                 # CONTENT UNCHANGED
@@ -416,6 +420,8 @@ async def crawl_site(
                         f"Page {page.id} unchanged, "
                         f"skipping ingestion"
                     )
+                    if crawl_job:
+                        crawl_job.pages_unchanged += 1
                     # Update URL status to reflect successful crawl of unchanged page
                     registry.update_status(
                         current_url,
@@ -614,6 +620,9 @@ async def crawl_site(
         )
 
     # Deactivate URLs not seen in this crawl (soft delete)
-    registry.deactivate_unseen(cutoff=crawl_start_time)
+    deactivated_count = registry.deactivate_unseen(cutoff=crawl_start_time)
+    if crawl_job:
+        crawl_job.pages_deactivated += deactivated_count
+        db.commit()
 
     return pages, registry

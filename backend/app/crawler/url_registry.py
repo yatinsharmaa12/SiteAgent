@@ -123,15 +123,20 @@ class URLRegistry:
 
         self.db.commit()
 
-    def deactivate_unseen(self, cutoff: datetime) -> None:
+    def deactivate_unseen(self, cutoff: datetime) -> int:
         # Deactivate URLs that were not seen during the crawl (last_seen_at is None)
         # or whose last_seen_at is older than the crawl start time.
-        self.db.query(URL).filter(
+        result = self.db.query(URL).filter(
             URL.company_id == self.company_id,
             URL.status != URLStatus.DEACTIVATED.value,
+            URL.is_active.is_(True),
             (URL.last_seen_at < cutoff) | (URL.last_seen_at == None),
-        ).update({"status": URLStatus.DEACTIVATED.value, "is_active": False})
+        ).update(
+            {"status": URLStatus.DEACTIVATED.value, "is_active": False},
+            synchronize_session=False,
+        )
         self.db.commit()
+        return result
 
     def all(self) -> list[URLRecord]:
 
