@@ -6,5 +6,6 @@
   "permissions": ["storage", "tabs", "sidePanel"],
   "host_permissions": ["http://localhost:8000/*"],
   "action": { "default_title": "Open Fieldnote" },
+  "background": { "service_worker": "background.js" },
   "side_panel": { "default_path": "index.html" }
 }
