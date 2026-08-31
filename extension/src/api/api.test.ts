@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { login, logout } from "./auth";
-import { askCompany } from "./chat";
+import { askCompany, uniqueSources } from "./chat";
 import { createCompany } from "./companies";
 import { cancelCrawl, getCrawlJob, startCrawl } from "./crawl";
 import { ApiError } from "./client";
@@ -34,5 +34,11 @@ describe("extension API client", () => {
   it("exposes safe 502 and 401 API errors", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ detail: "The AI service is temporarily unavailable." }), { status: 502 }));
     await expect(askCompany(3, "Question")).rejects.toEqual(expect.objectContaining({ status: 502, message: expect.stringContaining("temporarily") } satisfies Partial<ApiError>));
+  });
+
+  it("removes duplicate source URLs while preserving order", () => {
+    expect(uniqueSources([{ title: "Home", url: "https://acme.com" }, { title: "Home again", url: "https://acme.com" }, { title: "About", url: "https://acme.com/about" }])).toEqual([
+      { title: "Home", url: "https://acme.com" }, { title: "About", url: "https://acme.com/about" },
+    ]);
   });
 });

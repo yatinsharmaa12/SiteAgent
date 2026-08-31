@@ -1,4 +1,4 @@
-export const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
+export const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 

@@ -7,7 +7,7 @@ export function useCrawlStatus(companyId: number | null, jobId: number | null) {
   const [job, setJob] = useState<CrawlJob | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    if (!companyId || !jobId) return;
+    if (!companyId || !jobId) { setJob(null); setError(""); return; }
     let active = true; let timer: number | undefined;
     const poll = async () => {
       try {
