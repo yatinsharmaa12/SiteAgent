@@ -12,7 +12,7 @@ vi.mock("./api", () => ({
     companies: vi.fn().mockResolvedValue([{ id: 3, name: "Acme", website_url: "https://acme.com" }]),
     company: vi.fn().mockResolvedValue({ id: 3, name: "Acme", website_url: "https://acme.com" }),
     crawlJobs: vi.fn().mockResolvedValue([]),
-    createCompany: vi.fn(), createCrawl: vi.fn(), crawlJob: vi.fn(), cancelCrawl: vi.fn(), chat: vi.fn(), login: vi.fn(),
+    createCompany: vi.fn(), createCrawl: vi.fn(), crawlJob: vi.fn(), cancelCrawl: vi.fn(), chat: vi.fn(), login: vi.fn(), register: vi.fn(),
   },
 }));
 
@@ -42,5 +42,22 @@ describe("authenticated product shell", () => {
     await user.click(await screen.findByText("Open crawl details"));
     expect(await screen.findByText("Completed")).toBeInTheDocument();
     expect(api.crawlJob).toHaveBeenCalledWith(3, 8);
+  });
+});
+
+describe("account creation", () => {
+  it("registers and signs the user in", async () => {
+    const user = userEvent.setup();
+    sessionStorage.clear();
+    vi.mocked(api.register).mockResolvedValue({ id: 9, email: "new@example.com" });
+    vi.mocked(api.login).mockResolvedValue({ access_token: "new-token" });
+    render(<AuthProvider><MemoryRouter initialEntries={["/login"]}><App /></MemoryRouter></AuthProvider>);
+    await user.click(screen.getByRole("link", { name: "Create one" }));
+    await user.type(screen.getByLabelText("Email"), "new@example.com");
+    await user.type(screen.getByLabelText("Password"), "password123");
+    await user.type(screen.getByLabelText("Confirm password"), "password123");
+    await user.click(screen.getByRole("button", { name: /create account/i }));
+    await waitFor(() => expect(api.register).toHaveBeenCalledWith("new@example.com", "password123"));
+    expect(api.login).toHaveBeenCalledWith("new@example.com", "password123");
   });
 });
