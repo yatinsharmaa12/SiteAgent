@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from app.crawler.ssrf import validate_url_safety, SSRFError, is_safe_ip
 from app.crawler.fetcher import fetch_page
+from app.crawler.exceptions import ResourceLimitError
 
 
 def test_is_safe_ip():
@@ -80,13 +81,63 @@ async def test_fetcher_allows_safe_urls():
     # If validate_url_safety passes, it should attempt the fetch.
     # We will mock the actual network call to avoid real HTTP requests.
     with patch("app.crawler.fetcher.validate_url_safety", return_value=True):
-        with patch("httpx.AsyncClient.get") as mock_get:
+        with patch("httpx.AsyncClient.stream") as mock_stream:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.headers = {"content-type": "text/html"}
-            mock_response.text = "<html></html>"
-            mock_get.return_value = mock_response
-            
+            mock_response.encoding = "utf-8"
+
+            class StreamContext:
+                async def __aenter__(self):
+                    return mock_response
+
+                async def __aexit__(self, *_args):
+                    return False
+
+            async def chunks():
+                yield b"<html></html>"
+
+            mock_response.aiter_bytes.return_value = chunks()
+            mock_stream.return_value = StreamContext()
+
             content, status = await fetch_page("http://example.com")
             assert status == 200
             assert content == "<html></html>"
+
+
+@pytest.mark.anyio
+async def test_fetcher_stops_when_streamed_response_exceeds_limit():
+    with patch("app.crawler.fetcher.validate_url_safety", return_value=True), \
+         patch("app.crawler.fetcher.MAX_RESPONSE_SIZE_BYTES", 5), \
+         patch("httpx.AsyncClient.stream") as mock_stream:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "text/html"}
+
+        class StreamContext:
+            entered = False
+            exited = False
+
+            async def __aenter__(self):
+                self.entered = True
+                return mock_response
+
+            async def __aexit__(self, *_args):
+                self.exited = True
+                return False
+
+        stream_context = StreamContext()
+
+        async def chunks():
+            yield b"1234"
+            yield b"56"
+            raise AssertionError("fetcher continued reading after exceeding the limit")
+
+        mock_response.aiter_bytes.return_value = chunks()
+        mock_stream.return_value = stream_context
+
+        with pytest.raises(ResourceLimitError, match="exceeds maximum 5 bytes"):
+            await fetch_page("http://example.com")
+
+        assert stream_context.entered is True
+        assert stream_context.exited is True

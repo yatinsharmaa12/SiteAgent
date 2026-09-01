@@ -44,13 +44,19 @@ async def fetch_page(url: str) -> tuple[str, int]:
             }
         ) as client:
 
-            response = await client.get(url)
+            async with client.stream("GET", url) as response:
+                chunks: list[bytes] = []
+                response_size = 0
 
-            # Enforce maximum response size (bytes)
-            if len(response.content) > MAX_RESPONSE_SIZE_BYTES:
-                raise ResourceLimitError(
-                    f"Response size {len(response.content)} exceeds maximum {MAX_RESPONSE_SIZE_BYTES} bytes"
-                )
+                async for chunk in response.aiter_bytes():
+                    response_size += len(chunk)
+                    if response_size > MAX_RESPONSE_SIZE_BYTES:
+                        raise ResourceLimitError(
+                            f"Response size {response_size} exceeds maximum {MAX_RESPONSE_SIZE_BYTES} bytes"
+                        )
+                    chunks.append(chunk)
+
+                body = b"".join(chunks)
 
             content_type = response.headers.get(
                 "content-type",
@@ -74,7 +80,8 @@ async def fetch_page(url: str) -> tuple[str, int]:
                     f"Unsupported content type: {content_type}"
                 )
 
-            return response.text, response.status_code
+            encoding = response.encoding or "utf-8"
+            return body.decode(encoding, errors="replace"), response.status_code
 
     except RetryableCrawlError:
         raise
