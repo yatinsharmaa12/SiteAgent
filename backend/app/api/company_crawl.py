@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -48,6 +50,27 @@ class CrawlCompanyRequest(BaseModel):
     )
 
 
+SAFE_CANCEL_MESSAGE = "Cancelled by user"
+
+STATUS_ERROR_MESSAGES = {
+    "FAILED": "Crawl failed. Check the website is reachable and try again.",
+    "TIMED_OUT": "Crawl exceeded the maximum duration.",
+    "QUEUED": "Crawl will be retried.",
+}
+
+
+def sanitize_job_error(status: str, error) -> Optional[str]:
+    # Presentation-layer guard: raw DB errors may contain SSRF targets,
+    # resolved IPs, file paths, or provider internals. Full details stay
+    # in server logs/DB for operators; API callers get a generic message
+    # plus job_id for support reference.
+    if not error:
+        return None
+    if status == "CANCELLED" and error == SAFE_CANCEL_MESSAGE:
+        return error
+    return STATUS_ERROR_MESSAGES.get(status, "Crawl failed. Please try again.")
+
+
 def crawl_job_response(job):
     duration_seconds = None
     if job.started_at is not None:
@@ -79,7 +102,7 @@ def crawl_job_response(job):
         "pages_unchanged": job.pages_unchanged,
         "pages_deactivated": job.pages_deactivated,
 
-        "error": job.error,
+        "error": sanitize_job_error(job.status, job.error),
 
         "created_at": job.created_at,
         "started_at": job.started_at,

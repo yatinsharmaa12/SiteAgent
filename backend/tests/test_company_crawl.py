@@ -306,7 +306,11 @@ def test_owner_can_list_crawl_jobs():
     assert result[0]["status"] == "COMPLETED"
     assert result[1]["job_id"] == 98
     assert result[1]["status"] == "FAILED"
-    assert result[1]["error"] == "Crawler crashed"
+    # API sanitizes raw DB errors; internal detail stays server-side.
+    assert result[1]["error"] == (
+        "Crawl failed. Check the website is reachable and try again."
+    )
+    assert "Crawler crashed" not in result[1]["error"]
 
 def test_list_crawl_jobs_rejects_unowned_company():
     db = MagicMock()

@@ -1,9 +1,13 @@
+import logging
 import os
 from datetime import datetime
 
 from redis import Redis
 from rq import Queue
 from rq.job import Retry
+
+
+logger = logging.getLogger(__name__)
 
 from app.db.database import SessionLocal
 from app.domain.job_state import JobState, transition_job_state
@@ -31,6 +35,7 @@ def job_failure_handler(job, connection, type, value, traceback):
         return
         
     job_id = job.args[0]
+    logger.error("Worker/queue failure for crawl job %s: %s", job_id, value)
     db = SessionLocal()
     try:
         crawl_job = db.query(CrawlJob).filter(CrawlJob.id == job_id).first()

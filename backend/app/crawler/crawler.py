@@ -1,8 +1,12 @@
+import logging
 from datetime import datetime
 import hashlib
 from collections import deque
 from typing import Optional
 from urllib.parse import urlparse
+
+
+logger = logging.getLogger(__name__)
 from app.crawler.exceptions import RetryableCrawlError, CrawlCancelledError, ResourceLimitError, CrawlTimedOutError
 from app.crawler.url_filter import is_crawlable_url
 from app.crawler.link_extractor import extract_links, normalize_url
@@ -457,9 +461,7 @@ async def crawl_site(
             raise
         except Exception as error:
 
-            print(
-                f"CRAWL ERROR: {current_url} -> {error}"
-            )
+            logger.warning("Crawl error %s -> %s", current_url, error)
 
             error_http_status = None
 

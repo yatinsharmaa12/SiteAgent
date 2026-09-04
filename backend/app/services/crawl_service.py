@@ -1,6 +1,10 @@
+import logging
 from datetime import datetime
 
 from app.crawler.crawler import crawl_site
+
+
+logger = logging.getLogger(__name__)
 from app.crawler.exceptions import RetryableCrawlError, CrawlCancelledError, ResourceLimitError, CrawlTimedOutError
 from app.db.database import SessionLocal
 from app.domain.job_state import JobState, transition_job_state
@@ -82,11 +86,13 @@ async def run_crawl_job(
             return
 
         except RetryableCrawlError as error:
+            logger.warning("Crawl job %s retryable failure: %s", job.id, error)
             transition_job_state(job, JobState.QUEUED, str(error))
             db.commit()
             raise
 
         except Exception as error:
+            logger.exception("Crawl job %s failed", job.id)
             db.refresh(job)
             if job.status != JobState.CANCELLED.value:
                 transition_job_state(job, JobState.FAILED, str(error))
