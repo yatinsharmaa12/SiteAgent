@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import check_chat_rate_limit
 from app.db.session import get_db
 from app.models.user import User
 from app.rag.pipeline import answer_question
@@ -26,7 +27,9 @@ def chat(
     request: ChatRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    http_request: Request = None,  # type: ignore[assignment]
 ):
+    check_chat_rate_limit(http_request, current_user.id)
     company = get_company_for_user(
         db=db,
         company_id=request.company_id,

@@ -2,12 +2,14 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
 )
 from datetime import datetime
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import check_crawl_rate_limit
 from app.db.session import get_db
 from app.models.user import User
 
@@ -96,7 +98,9 @@ def crawl_company(
     db: Session = Depends(
         get_db
     ),
+    http_request: Request = None,  # type: ignore[assignment]
 ):
+    check_crawl_rate_limit(http_request, current_user.id)
 
     company = get_company_for_user(
         db=db,

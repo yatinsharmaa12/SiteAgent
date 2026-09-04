@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
+from app.core.rate_limit import (
+    check_login_rate_limit,
+    check_register_rate_limit,
+)
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -28,7 +32,9 @@ class RegisterRequest(BaseModel):
 def register(
     request: RegisterRequest,
     db: Session = Depends(get_db),
+    http_request: Request = None,  # type: ignore[assignment]
 ):
+    check_register_rate_limit(http_request)
     existing_user = (
         db.query(User)
         .filter(User.email == request.email)
@@ -59,7 +65,10 @@ def register(
 def login(
     request: LoginRequest,
     db: Session = Depends(get_db),
+    http_request: Request = None,  # type: ignore[assignment]
 ):
+    email = getattr(request, "email", None)
+    check_login_rate_limit(http_request, email if isinstance(email, str) else None)
     user = (
         db.query(User)
         .filter(User.email == request.email)
@@ -86,7 +95,10 @@ def login(
 def token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
+    http_request: Request = None,  # type: ignore[assignment]
 ):
+    username = getattr(form_data, "username", None)
+    check_login_rate_limit(http_request, username if isinstance(username, str) else None)
     user = (
         db.query(User)
         .filter(User.email == form_data.username)
