@@ -2,7 +2,8 @@ from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token_payload
+from app.core.token_blocklist import is_token_revoked
 from app.db.session import get_db
 from app.models.user import User
 
@@ -18,8 +19,15 @@ def get_current_user(
 ) -> User:
 
     try:
-        user_id = decode_access_token(token)
+        payload = decode_access_token_payload(token)
+        user_id = int(payload["sub"])
     except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+        )
+
+    if is_token_revoked(payload.get("jti")):
         raise HTTPException(
             status_code=401,
             detail="Invalid or expired token",

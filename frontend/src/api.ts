@@ -43,6 +43,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const api = {
   login: (email: string, password: string) => request<{ access_token: string }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   register: (email: string, password: string) => request<{ id: number; email: string }>("/auth/register", { method: "POST", body: JSON.stringify({ email, password }) }),
+  logout: () => request<{ message: string }>("/auth/logout", { method: "POST" }),
   companies: () => request<Company[]>("/companies"),
   company: (id: number) => request<Company>(`/companies/${id}`),
   createCompany: (payload: { name: string; website_url: string }) => request<Company>("/companies", { method: "POST", body: JSON.stringify(payload) }),

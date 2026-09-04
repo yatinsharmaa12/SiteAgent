@@ -1,15 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
+from app.core.dependencies import oauth2_scheme
 from app.core.rate_limit import (
     check_login_rate_limit,
     check_register_rate_limit,
 )
 from app.core.security import (
     create_access_token,
+    decode_access_token_payload,
     hash_password,
     verify_password,
 )
+from app.core.token_blocklist import revoke_token
 from app.db.session import get_db
 from app.models.user import User
 from fastapi.security import OAuth2PasswordRequestForm
@@ -142,3 +145,20 @@ def token(
         "access_token": access_token,
         "token_type": "bearer",
     }
+
+
+@router.post("/logout")
+def logout(
+    token: str = Depends(oauth2_scheme),
+):
+    try:
+        payload = decode_access_token_payload(token)
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+        )
+
+    revoke_token(payload.get("jti"), payload.get("exp"))
+
+    return {"message": "Logged out"}

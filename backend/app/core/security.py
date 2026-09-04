@@ -1,4 +1,6 @@
+import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
 
 import jwt
 from pwdlib import PasswordHash
@@ -28,13 +30,16 @@ def verify_password(
 
 
 def create_access_token(user_id: int) -> str:
-    expires = datetime.now(timezone.utc) + timedelta(
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(
         minutes=ACCESS_TOKEN_EXPIRE_MINUTES
     )
 
     payload = {
         "sub": str(user_id),
         "exp": expires,
+        "iat": now,
+        "jti": uuid.uuid4().hex,
     }
 
     return jwt.encode(
@@ -44,11 +49,15 @@ def create_access_token(user_id: int) -> str:
     )
 
 
-def decode_access_token(token: str) -> int:
-    payload = jwt.decode(
+def decode_access_token_payload(token: str) -> Dict[str, Any]:
+    return jwt.decode(
         token,
         JWT_SECRET_KEY,
         algorithms=[JWT_ALGORITHM],
     )
+
+
+def decode_access_token(token: str) -> int:
+    payload = decode_access_token_payload(token)
 
     return int(payload["sub"])

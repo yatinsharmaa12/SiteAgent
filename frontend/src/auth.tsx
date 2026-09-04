@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { api } from "./api";
 
-type AuthContextValue = { token: string | null; login: (email: string, password: string) => Promise<void>; logout: () => void };
+type AuthContextValue = { token: string | null; login: (email: string, password: string) => Promise<void>; logout: () => Promise<void> };
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -11,7 +11,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem("fieldnote_token", result.access_token);
     setToken(result.access_token);
   }
-  function logout() { sessionStorage.removeItem("fieldnote_token"); setToken(null); }
+  async function logout() {
+    try {
+      if (sessionStorage.getItem("fieldnote_token")) await api.logout();
+    } catch {
+      // Best-effort revocation; always clear local state.
+    } finally {
+      sessionStorage.removeItem("fieldnote_token");
+      setToken(null);
+    }
+  }
   return <AuthContext.Provider value={{ token, login, logout }}>{children}</AuthContext.Provider>;
 }
 
