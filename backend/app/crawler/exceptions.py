@@ -14,10 +14,6 @@ class ResourceLimitError(Exception):
     """Raised when a response exceeds the maximum allowed size."""
     pass
 
-class CrawlTimeoutError(Exception):
-    """Raised when an individual request times out (retryable)."""
-    pass
-
 class CrawlTimedOutError(Exception):
     """Raised when a CrawlJob exceeds its overall duration limit."""
     pass

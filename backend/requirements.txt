@@ -57,3 +57,9 @@ urllib3==2.6.3
 uvicorn==0.39.0
 redis==7.0.1
 rq==2.8.0
+alembic==1.16.5
+PyJWT==2.13.0
+pwdlib==0.2.1
+google-genai==1.47.0
+email-validator==2.3.0
+python-multipart==0.0.20
