@@ -211,8 +211,10 @@ def test_crawl_job_response_duration_for_completed_and_running_jobs():
         "error": None, "created_at": None, "started_at": completed.started_at,
         "completed_at": None,
     })
-    with patch("app.api.company_crawl.datetime") as mocked_datetime:
-        mocked_datetime.utcnow.return_value = running.started_at + timedelta(seconds=3)
+    with patch(
+        "app.api.company_crawl.now_utc_naive",
+        return_value=running.started_at + timedelta(seconds=3),
+    ):
         assert crawl_job_response(running)["duration_seconds"] == 3.0
 
 def test_crawl_job_not_found():

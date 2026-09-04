@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.time import now_utc_naive
 from app.db.database import Base
 
 
@@ -52,6 +53,6 @@ class Page(Base):
 
     crawled_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=now_utc_naive,
         nullable=False,
     )

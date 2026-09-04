@@ -40,7 +40,7 @@ frontend/   React + TypeScript + Vite product interface
 
 ## Prerequisites
 
-- Python 3.9 or newer
+- Python 3.12 or newer
 - Node.js and npm
 - PostgreSQL with the `vector` extension available
 - Redis

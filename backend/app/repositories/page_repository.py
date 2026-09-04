@@ -1,8 +1,8 @@
-from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.time import now_utc_naive
 from app.models.page_db import Page
 
 
@@ -45,7 +45,7 @@ class PageRepository:
             content=content,
             http_status=http_status,
             content_hash=content_hash,
-            crawled_at=datetime.utcnow(),
+            crawled_at=now_utc_naive(),
         )
 
         self.db.add(page)
@@ -71,7 +71,7 @@ class PageRepository:
         page.content = content
         page.http_status = http_status
         page.content_hash = content_hash
-        page.crawled_at = datetime.utcnow()
+        page.crawled_at = now_utc_naive()
 
         if commit:
             self.db.commit()

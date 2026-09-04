@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
+from app.core.time import now_utc_naive
 from app.db.database import SessionLocal
 from app.models.crawl_job import CrawlJob
 from app.domain.job_state import JobState, transition_job_state
@@ -12,7 +13,7 @@ def recover_stale_jobs(timeout_seconds: int = 300) -> int:
     db = SessionLocal()
     recovered_count = 0
     try:
-        threshold_time = datetime.utcnow() - timedelta(seconds=timeout_seconds)
+        threshold_time = now_utc_naive() - timedelta(seconds=timeout_seconds)
         
         # Initial fast fetch of potentially stale jobs
         stale_jobs = (

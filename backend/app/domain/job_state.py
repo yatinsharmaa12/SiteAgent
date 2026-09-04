@@ -1,5 +1,6 @@
 from enum import Enum
-from datetime import datetime
+
+from app.core.time import now_utc_naive
 
 
 class JobState(str, Enum):
@@ -46,12 +47,12 @@ def transition_job_state(job, new_status: str, error: str = None):
     if new_state == JobState.RUNNING:
         if current_status == JobState.QUEUED:
             job.attempt_count += 1
-        job.started_at = datetime.utcnow()
-        job.last_heartbeat_at = datetime.utcnow()
+        job.started_at = now_utc_naive()
+        job.last_heartbeat_at = now_utc_naive()
     elif new_state == JobState.COMPLETED:
-        job.completed_at = datetime.utcnow()
+        job.completed_at = now_utc_naive()
     elif new_state in {JobState.FAILED, JobState.CANCELLED, JobState.TIMED_OUT}:
-        job.completed_at = datetime.utcnow()
+        job.completed_at = now_utc_naive()
         if error:
             job.error = error
     elif new_state == JobState.QUEUED and current_status == JobState.RUNNING:

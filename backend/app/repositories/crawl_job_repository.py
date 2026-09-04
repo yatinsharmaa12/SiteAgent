@@ -1,7 +1,6 @@
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
+from app.core.time import now_utc_naive
 from app.models.crawl_job import CrawlJob
 
 
@@ -24,7 +23,7 @@ def create_crawl_job(
         pages_changed=0,
         pages_unchanged=0,
         pages_deactivated=0,
-        created_at=datetime.utcnow(),
+        created_at=now_utc_naive(),
     )
 
     db.add(job)

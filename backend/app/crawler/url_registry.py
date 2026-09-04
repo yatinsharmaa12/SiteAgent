@@ -3,6 +3,8 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.time import now_utc_naive
+
 from app.models.url import URLRecord, URLStatus
 from app.models.url_db import URL
 from app.crawler.link_extractor import normalize_url
@@ -38,7 +40,7 @@ class URLRegistry:
         if record:
             # Update existing record's status and timestamps for incremental crawl
             record.status = status.value
-            record.last_seen_at = datetime.utcnow()
+            record.last_seen_at = now_utc_naive()
             record.last_error = None
             # Preserve depth, discovered_from if already set; otherwise update
             if depth is not None:
@@ -112,13 +114,13 @@ class URLRegistry:
 
         record.status = status.value
         record.last_error = error
-        record.last_seen_at = datetime.utcnow()
+        record.last_seen_at = now_utc_naive()
 
         if http_status is not None:
             record.http_status = http_status
 
         if status == URLStatus.CRAWLED:
-            record.last_crawled_at = datetime.utcnow()
+            record.last_crawled_at = now_utc_naive()
             record.crawl_count += 1
 
         self.db.commit()

@@ -1,6 +1,8 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import patch, MagicMock
+
+from app.core.time import now_utc_naive
 
 from app.services.recovery_service import recover_stale_jobs
 from app.domain.job_state import JobState
@@ -10,11 +12,11 @@ class MockCrawlJob:
     def __init__(self, id, status, heartbeat_offset=0):
         self.id = id
         self.status = status
-        self.created_at = datetime.utcnow() - timedelta(seconds=1000)
-        self.started_at = datetime.utcnow() - timedelta(seconds=500)
-        
+        self.created_at = now_utc_naive() - timedelta(seconds=1000)
+        self.started_at = now_utc_naive() - timedelta(seconds=500)
+
         if heartbeat_offset is not None:
-            self.last_heartbeat_at = datetime.utcnow() - timedelta(seconds=heartbeat_offset)
+            self.last_heartbeat_at = now_utc_naive() - timedelta(seconds=heartbeat_offset)
         else:
             self.last_heartbeat_at = None
             

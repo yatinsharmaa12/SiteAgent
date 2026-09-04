@@ -6,12 +6,12 @@ from fastapi import (
     HTTPException,
     Request,
 )
-from datetime import datetime
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
 from app.core.rate_limit import check_crawl_rate_limit
+from app.core.time import now_utc_naive
 from app.db.session import get_db
 from app.models.user import User
 
@@ -82,7 +82,7 @@ def crawl_job_response(job):
         elif job.status == "RUNNING":
             duration_seconds = max(
                 0.0,
-                (datetime.utcnow() - job.started_at).total_seconds(),
+                (now_utc_naive() - job.started_at).total_seconds(),
             )
 
     return {

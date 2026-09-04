@@ -1,5 +1,4 @@
-from datetime import datetime
-
+from app.core.time import now_utc_naive
 from app.models.company import Company
 from app.models.crawl_job import CrawlJob
 from app.models.user import User
@@ -40,7 +39,7 @@ def test_crawl_job_state_transition(db):
     assert job.status == "QUEUED"
 
     job.status = "RUNNING"
-    job.started_at = datetime.utcnow()
+    job.started_at = now_utc_naive()
 
     db.commit()
     db.refresh(job)
@@ -50,7 +49,7 @@ def test_crawl_job_state_transition(db):
 
     job.status = "COMPLETED"
     job.pages_crawled = 3
-    job.completed_at = datetime.utcnow()
+    job.completed_at = now_utc_naive()
 
     db.commit()
     db.refresh(job)

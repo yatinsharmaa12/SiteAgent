@@ -14,6 +14,7 @@ import app.crawler.fetcher as fetcher
 from app.crawler.parser import parse_page
 import asyncio
 from app.core.config import MAX_CRAWL_DURATION_SECONDS, DOMAIN_MIN_DELAY_SECONDS
+from app.core.time import now_utc_naive
 from app.crawler.url_registry import URLRegistry
 from app.crawler.robots import RobotsChecker
 from app.domain.job_state import JobState
@@ -65,7 +66,7 @@ def update_crawl_progress(
         if url.status == "failed"
     )
 
-    now = datetime.utcnow()
+    now = now_utc_naive()
     if not crawl_job.last_heartbeat_at or (now - crawl_job.last_heartbeat_at).total_seconds() > 15:
         # Check if the job has been externally cancelled
         current_status = db.query(CrawlJob.status).filter(CrawlJob.id == crawl_job.id).scalar()
@@ -173,7 +174,7 @@ async def crawl_site(
     # -------------------------------------------------
     # Initialize per-domain throttle and overall duration tracking
     last_request_at: dict[str, datetime] = {}
-    crawl_start_time = datetime.utcnow()
+    crawl_start_time = now_utc_naive()
 
     while queue and len(pages) < max_pages:
 
@@ -190,13 +191,13 @@ async def crawl_site(
         # DOMAIN RATE LIMITING
         # -------------------------------------------------
         host = urlparse(current_url).hostname
-        now = datetime.utcnow()
+        now = now_utc_naive()
         last_at = last_request_at.get(host)
         if last_at:
             elapsed = (now - last_at).total_seconds()
             if elapsed < DOMAIN_MIN_DELAY_SECONDS:
                 await asyncio.sleep(DOMAIN_MIN_DELAY_SECONDS - elapsed)
-        last_request_at[host] = datetime.utcnow()
+        last_request_at[host] = now_utc_naive()
 
         visited_this_crawl.add(
             current_url
@@ -236,7 +237,7 @@ async def crawl_site(
         # -------------------------------------------------
         # MAX CRAWL DURATION CHECK
         # -------------------------------------------------
-        if (datetime.utcnow() - crawl_start_time).total_seconds() > MAX_CRAWL_DURATION_SECONDS:
+        if (now_utc_naive() - crawl_start_time).total_seconds() > MAX_CRAWL_DURATION_SECONDS:
             raise CrawlTimedOutError("Crawl job exceeded maximum duration")
 
         # -------------------------------------------------
