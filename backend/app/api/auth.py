@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 from app.core.rate_limit import (
     check_login_rate_limit,
@@ -23,9 +23,27 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+
+def validate_password_strength(password: str) -> str:
+    if not isinstance(password, str):
+        raise ValueError("Password must be a string")
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters")
+    if len(password) > 128:
+        raise ValueError("Password must be at most 128 characters")
+    if not password.strip() or len(password.strip()) < 8:
+        raise ValueError("Password must be at least 8 characters")
+    return password
+
+
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, value: str) -> str:
+        return validate_password_strength(value)
 
 
 @router.post("/register")
@@ -35,6 +53,10 @@ def register(
     http_request: Request = None,  # type: ignore[assignment]
 ):
     check_register_rate_limit(http_request)
+    try:
+        validate_password_strength(request.password)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
     existing_user = (
         db.query(User)
         .filter(User.email == request.email)
