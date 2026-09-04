@@ -15,6 +15,22 @@ def split_long_sentence(
 ) -> list[str]:
 
     words = sentence.split()
+
+    # Fast path for pathological input (e.g. minified blob with no
+    # sentence breaks): per-word token_count() is O(n^2) encodes and
+    # burns CPU. Fixed windows keep it O(n) with no data loss.
+    if len(words) > 800:
+        parts = [
+            " ".join(words[i : i + 300]) for i in range(0, len(words), 300)
+        ]
+        fixed: list[str] = []
+        for part in parts:
+            if token_count(part) <= chunk_size:
+                fixed.append(part)
+            else:
+                fixed.extend(split_long_sentence(part, chunk_size))
+        return fixed
+
     parts = []
     current_words = []
 

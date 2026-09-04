@@ -7,6 +7,10 @@ from app.models.page_db import Page
 from app.models.page_chunk import PageChunk
 
 
+MAX_CONTENT_CHARS = 50000
+MAX_CHUNKS_PER_PAGE = 100
+
+
 def ingest_page(
     page_id: int,
     db: Session,
@@ -53,6 +57,11 @@ def ingest_page(
 
         cleaned = clean_text(page.content)
 
+        # Bound per-page work: a 5MB hostile page must not become
+        # thousands of chunks/embeddings/DB rows (worker 30m timeout x3).
+        if len(cleaned) > MAX_CONTENT_CHARS:
+            cleaned = cleaned[:MAX_CONTENT_CHARS]
+
         chunks = chunk_text(
             cleaned,
             chunk_size=500,
@@ -63,6 +72,9 @@ def ingest_page(
                 f"Page {page.id} contains no chunks"
             )
             return
+
+        if len(chunks) > MAX_CHUNKS_PER_PAGE:
+            chunks = chunks[:MAX_CHUNKS_PER_PAGE]
 
         embeddings = embedder.embed_many(chunks)
 

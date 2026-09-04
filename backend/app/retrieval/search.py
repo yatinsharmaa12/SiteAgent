@@ -7,12 +7,22 @@ from app.models.page_db import Page
 DEFAULT_MAX_DISTANCE = 0.90
 
 
+MAX_QUERY_CHARS = 2000
+
+
 def search_chunks(
     query: str,
     company_id: int,
     limit: int = 5,
     max_distance: float = DEFAULT_MAX_DISTANCE,
 ):
+    # Cheap rejection before touching the embedding model / DB.
+    cleaned = (query or "").strip()
+    if not cleaned:
+        raise ValueError("Query must not be empty")
+    if len(query) > MAX_QUERY_CHARS:
+        raise ValueError(f"Query must be at most {MAX_QUERY_CHARS} characters")
+
     embedder = EmbeddingModel()
     query_embedding = embedder.embed(query)
 

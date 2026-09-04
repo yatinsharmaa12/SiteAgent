@@ -120,16 +120,18 @@ async def crawl_site(
 
     page_repository = PageRepository(db)
 
-    # Load embedding model once for entire crawl.
-    embedder = EmbeddingModel()
-
     # -------------------------------------------------
-    # ROBOTS.TXT
+    # ROBOTS.TXT (cheap network check first — do not touch the
+    # heavy embedding model until the start URL validates)
     # -------------------------------------------------
 
     robots = RobotsChecker(start_url)
 
     await robots.load()
+
+    # Shared singleton since embedding.py caches; resolved here so an
+    # invalid/SSRF start URL fails before any heavy subsystem init.
+    embedder = EmbeddingModel()
 
     # -------------------------------------------------
     # RESULTS

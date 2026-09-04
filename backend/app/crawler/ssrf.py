@@ -141,12 +141,26 @@ def resolve_hostname(hostname: str) -> list[str]:
         return []
 
 
+ALLOWED_PORTS = {80, 443}
+
+
+def _check_port(parsed) -> None:
+    # Reject URLs probing non-web ports (worker as port scanner /
+    # slowloris via tarpitted ports). Default ports have port None.
+    try:
+        port = parsed.port
+    except ValueError:
+        raise ValueError("Invalid port in URL")
+    if port is not None and port not in ALLOWED_PORTS:
+        raise ValueError(f"Port {port} is not allowed (only 80/443)")
+
+
 def validate_website_url_syntax(url: str) -> str:
     """
     Fast syntactic check for user-supplied website URLs (no DNS).
     Returns stripped URL or raises ValueError.
     Blocks non-http(s), missing host, embedded credentials,
-    and literal private/loopback IPs.
+    non-web ports, and literal private/loopback IPs.
     Full DNS resolution happens later in validate_url_safety
     (fetcher + robots) at crawl time.
     """
@@ -165,6 +179,8 @@ def validate_website_url_syntax(url: str) -> str:
 
     if parsed.username or parsed.password:
         raise ValueError("URL must not contain credentials")
+
+    _check_port(parsed)
 
     # If hostname is a literal IP, reject unsafe ones now.
     try:
@@ -192,11 +208,16 @@ def validate_url_safety(url: str):
     hostname = parsed.hostname
     if not hostname:
         raise SSRFError("Missing hostname")
-        
+
+    try:
+        _check_port(parsed)
+    except ValueError as error:
+        raise SSRFError(str(error))
+
     # If the hostname is literally an IP address, urlparse leaves it in hostname.
     # We can check it directly, but resolve_hostname also works for raw IPs
     # by just echoing back the IP (since getaddrinfo parses it).
-    
+
     ips = resolve_hostname(hostname)
     if not ips:
         raise SSRFError(f"Could not resolve hostname: {hostname}")
