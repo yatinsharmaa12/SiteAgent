@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
@@ -19,7 +19,14 @@ router = APIRouter(
 
 class ChatRequest(BaseModel):
     company_id: int
-    question: str
+    question: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("question")
+    @classmethod
+    def check_question(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Question must not be empty")
+        return value
 
 
 @router.post("")
@@ -47,6 +54,8 @@ def chat(
             question=request.question,
             company_id=company.id,
         )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
     except LLMProviderError:
         raise HTTPException(
             status_code=502,

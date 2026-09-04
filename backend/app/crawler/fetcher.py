@@ -48,6 +48,42 @@ async def fetch_page(url: str) -> tuple[str, int]:
             ) as client:
 
                 async with client.stream("GET", url) as response:
+                    # Fail fast before downloading the body: status, type,
+                    # and declared length are all available in headers.
+                    if response.status_code >= 500:
+                        raise RetryableCrawlError(
+                            f"Server error HTTP {response.status_code}"
+                        )
+
+                    if response.status_code >= 400:
+                        raise httpx.HTTPStatusError(
+                            f"HTTP {response.status_code}",
+                            request=response.request,
+                            response=response,
+                        )
+
+                    content_type = response.headers.get(
+                        "content-type",
+                        "",
+                    ).split(";")[0].strip().lower()
+
+                    if content_type not in ALLOWED_CONTENT_TYPES:
+                        raise ValueError(
+                            f"Unsupported content type: {content_type}"
+                        )
+
+                    declared_length = response.headers.get("content-length")
+                    if declared_length is not None:
+                        try:
+                            if int(str(declared_length).strip()) > MAX_RESPONSE_SIZE_BYTES:
+                                raise ResourceLimitError(
+                                    f"Response size {declared_length} exceeds maximum {MAX_RESPONSE_SIZE_BYTES} bytes"
+                                )
+                        except (TypeError, ValueError) as error:
+                            if isinstance(error, ResourceLimitError):
+                                raise
+                            # Ignore malformed content-length; per-chunk cap below still applies.
+
                     chunks: list[bytes] = []
                     response_size = 0
 
@@ -60,28 +96,6 @@ async def fetch_page(url: str) -> tuple[str, int]:
                         chunks.append(chunk)
 
                     body = b"".join(chunks)
-
-                content_type = response.headers.get(
-                    "content-type",
-                    "",
-                ).split(";")[0].strip().lower()
-
-                if response.status_code >= 500:
-                    raise RetryableCrawlError(
-                        f"Server error HTTP {response.status_code}"
-                    )
-
-                if response.status_code >= 400:
-                    raise httpx.HTTPStatusError(
-                        f"HTTP {response.status_code}",
-                        request=response.request,
-                        response=response,
-                    )
-
-                if content_type not in ALLOWED_CONTENT_TYPES:
-                    raise ValueError(
-                        f"Unsupported content type: {content_type}"
-                    )
 
                 encoding = response.encoding or "utf-8"
                 return body.decode(encoding, errors="replace"), response.status_code

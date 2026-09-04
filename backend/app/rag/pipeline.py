@@ -4,10 +4,19 @@ from app.retrieval.context import build_context
 from app.retrieval.search import search_chunks
 
 
+MAX_QUESTION_CHARS = 2000
+
+
 def answer_question(
     question: str,
     company_id: int,
 ) -> dict:
+    cleaned = (question or "").strip()
+    if not cleaned:
+        raise ValueError("Question must not be empty")
+    if len(question) > MAX_QUESTION_CHARS:
+        raise ValueError(f"Question must be at most {MAX_QUESTION_CHARS} characters")
+
     results = search_chunks(
         question,
         company_id=company_id,
