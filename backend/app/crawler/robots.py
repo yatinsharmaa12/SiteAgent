@@ -3,7 +3,7 @@ from urllib.robotparser import RobotFileParser
 
 import httpx
 
-from app.crawler.ssrf import SSRFError, validate_url_safety
+from app.crawler.ssrf import SSRFError, dns_pinning, validate_url_safety
 
 
 async def _check_ssrf(request: httpx.Request):
@@ -30,28 +30,31 @@ class RobotsChecker:
         # Fail closed on SSRF: do not fetch robots.txt from internal hosts.
         # Let SSRFError/ValueError propagate so the crawl fails instead
         # of silently allowing all URLs.
-        validate_url_safety(self.robots_url)
+        # DNS is pinned for the whole fetch to close the
+        # validate -> connect rebinding gap.
+        with dns_pinning():
+            validate_url_safety(self.robots_url)
 
-        try:
-            async with httpx.AsyncClient(
-                follow_redirects=True,
-                timeout=10.0,
-                event_hooks={"request": [_check_ssrf]},
-            ) as client:
-                response = await client.get(self.robots_url)
+            try:
+                async with httpx.AsyncClient(
+                    follow_redirects=True,
+                    timeout=10.0,
+                    event_hooks={"request": [_check_ssrf]},
+                ) as client:
+                    response = await client.get(self.robots_url)
 
-                if response.status_code == 200:
-                    self.parser.parse(
-                        response.text.splitlines()
-                    )
-                else:
-                    self.parser.parse([])
+                    if response.status_code == 200:
+                        self.parser.parse(
+                            response.text.splitlines()
+                        )
+                    else:
+                        self.parser.parse([])
 
-        except (SSRFError, ValueError):
-            raise
+            except (SSRFError, ValueError):
+                raise
 
-        except httpx.HTTPError:
-            self.parser.parse([])
+            except httpx.HTTPError:
+                self.parser.parse([])
 
         self.loaded = True
 

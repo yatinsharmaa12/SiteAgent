@@ -1,11 +1,104 @@
 import socket
 import ipaddress
+from contextlib import contextmanager
 from urllib.parse import urlparse
 
 
 class SSRFError(Exception):
     """Raised when a URL is rejected by SSRF protection."""
     pass
+
+
+# ---------------------------------------------------------------------------
+# DNS pinning to close the validate -> connect TOCTOU / DNS-rebinding gap.
+#
+# Without pinning, validate_url_safety() resolves the hostname to safe IPs,
+# but httpx then resolves the *same* hostname again at connect time. An
+# attacker with fast-flux DNS (TTL 0, alternating public/private answers)
+# can pass validation and then make the real connection go to
+# 127.0.0.1 / 169.254.169.254 / 10/8.
+#
+# Fix: while a fetch is in progress, patch socket.getaddrinfo so every
+# resolution (validation AND connect, including asyncio's loop.getaddrinfo
+# which delegates to socket.getaddrinfo) returns the SAME validated IPs.
+# ---------------------------------------------------------------------------
+
+_original_getaddrinfo = socket.getaddrinfo
+_pinned_hosts: dict[str, list[str]] = {}
+_pinning_depth = 0
+
+
+def _build_pinned_addrinfo(host: str, port, ips: list[str], family=0, type=0, proto=0):
+    results = []
+    for ip_str in ips:
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if isinstance(ip, ipaddress.IPv4Address):
+            fam = socket.AF_INET
+            sockaddr = (ip_str, port if port is not None else 0)
+        else:
+            fam = socket.AF_INET6
+            sockaddr = (ip_str, port if port is not None else 0, 0, 0)
+        if family != 0 and family != fam:
+            continue
+        socktype = type if type != 0 else socket.SOCK_STREAM
+        results.append((fam, socktype, proto, "", sockaddr))
+    if not results:
+        raise socket.gaierror(socket.EAI_NONAME, "Name or service not known (pinned)")
+    return results
+
+
+def _patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    # Normalize host to string for lookup.
+    key = host.lower() if isinstance(host, str) else host
+
+    if isinstance(host, str) and key in _pinned_hosts:
+        return _build_pinned_addrinfo(host, port, _pinned_hosts[key], family, type, proto)
+
+    # Not pinned: resolve for real, but fail closed on unsafe IPs so a
+    # redirect to an internal host cannot slip through at socket level
+    # even if a request hook is missed.
+    results = _original_getaddrinfo(host, port, family, type, proto, flags)
+    for entry in results:
+        sockaddr = entry[4]
+        ip_str = sockaddr[0] if sockaddr else ""
+        try:
+            ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if not is_safe_ip(ip_str):
+            raise socket.gaierror(
+                socket.EAI_NONAME,
+                f"SSRF blocked: {host} resolves to unsafe IP {ip_str}",
+            )
+    return results
+
+
+@contextmanager
+def dns_pinning():
+    """Pin DNS for the duration of one fetch (validation + connect)."""
+    global _pinning_depth
+    _pinning_depth += 1
+    prev_getaddrinfo = socket.getaddrinfo
+    socket.getaddrinfo = _patched_getaddrinfo  # type: ignore[assignment]
+    try:
+        yield
+    finally:
+        _pinning_depth -= 1
+        if _pinning_depth <= 0:
+            _pinning_depth = 0
+            socket.getaddrinfo = prev_getaddrinfo  # type: ignore[assignment]
+            _pinned_hosts.clear()
+
+
+def _pin_host(hostname: str, ips: list[str]) -> None:
+    if _pinning_depth > 0 and hostname:
+        key = hostname.lower()
+        if key not in _pinned_hosts:
+            # First validated answer wins for this fetch.
+            _pinned_hosts[key] = list(ips)
 
 
 def is_safe_ip(ip_str: str) -> bool:
@@ -107,9 +200,13 @@ def validate_url_safety(url: str):
     ips = resolve_hostname(hostname)
     if not ips:
         raise SSRFError(f"Could not resolve hostname: {hostname}")
-        
+
     for ip in ips:
         if not is_safe_ip(ip):
             raise SSRFError(f"URL {url} resolves to unsafe IP address: {ip}")
-            
+
+    # Pin the validated answer so the subsequent connect (which re-resolves
+    # the same hostname) uses these exact IPs — closing DNS rebinding.
+    _pin_host(hostname, ips)
+
     return True
