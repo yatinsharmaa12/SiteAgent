@@ -3,6 +3,15 @@ from urllib.robotparser import RobotFileParser
 
 import httpx
 
+from app.crawler.ssrf import SSRFError, validate_url_safety
+
+
+async def _check_ssrf(request: httpx.Request):
+    try:
+        validate_url_safety(str(request.url))
+    except SSRFError as error:
+        raise ValueError(f"SSRF blocked: {error}")
+
 
 class RobotsChecker:
     def __init__(self, base_url: str):
@@ -18,10 +27,16 @@ class RobotsChecker:
         self.loaded = False
 
     async def load(self) -> None:
+        # Fail closed on SSRF: do not fetch robots.txt from internal hosts.
+        # Let SSRFError/ValueError propagate so the crawl fails instead
+        # of silently allowing all URLs.
+        validate_url_safety(self.robots_url)
+
         try:
             async with httpx.AsyncClient(
                 follow_redirects=True,
                 timeout=10.0,
+                event_hooks={"request": [_check_ssrf]},
             ) as client:
                 response = await client.get(self.robots_url)
 
@@ -31,6 +46,9 @@ class RobotsChecker:
                     )
                 else:
                     self.parser.parse([])
+
+        except (SSRFError, ValueError):
+            raise
 
         except httpx.HTTPError:
             self.parser.parse([])

@@ -48,6 +48,43 @@ def resolve_hostname(hostname: str) -> list[str]:
         return []
 
 
+def validate_website_url_syntax(url: str) -> str:
+    """
+    Fast syntactic check for user-supplied website URLs (no DNS).
+    Returns stripped URL or raises ValueError.
+    Blocks non-http(s), missing host, embedded credentials,
+    and literal private/loopback IPs.
+    Full DNS resolution happens later in validate_url_safety
+    (fetcher + robots) at crawl time.
+    """
+    cleaned = (url or "").strip()
+    if not cleaned:
+        raise ValueError("Website URL must not be empty")
+
+    parsed = urlparse(cleaned)
+
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"Invalid scheme: {parsed.scheme or '(missing)'}")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Missing hostname")
+
+    if parsed.username or parsed.password:
+        raise ValueError("URL must not contain credentials")
+
+    # If hostname is a literal IP, reject unsafe ones now.
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        pass  # not a literal IP — DNS check deferred to crawl time
+    else:
+        if not is_safe_ip(hostname):
+            raise ValueError(f"URL resolves to unsafe IP address: {hostname}")
+
+    return cleaned
+
+
 def validate_url_safety(url: str):
     """
     Validates a URL against SSRF threats by parsing the hostname and

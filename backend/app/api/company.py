@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
+from app.crawler.ssrf import validate_website_url_syntax
 from app.db.session import get_db
 from app.models.company import Company
 from app.models.user import User
@@ -18,14 +19,31 @@ router = APIRouter(
 )
 
 
+def _validate_website_url(value: str) -> str:
+    try:
+        return validate_website_url_syntax(value)
+    except ValueError as error:
+        raise ValueError(str(error))
+
+
 class CompanyCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     website_url: str = Field(min_length=1, max_length=2048)
+
+    @field_validator("website_url")
+    @classmethod
+    def check_website_url(cls, value: str) -> str:
+        return _validate_website_url(value)
 
 
 class CompanyUpdateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     website_url: str = Field(min_length=1, max_length=2048)
+
+    @field_validator("website_url")
+    @classmethod
+    def check_website_url(cls, value: str) -> str:
+        return _validate_website_url(value)
 
 
 @router.post("")
@@ -34,9 +52,14 @@ def create_company(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    try:
+        website_url = validate_website_url_syntax(request.website_url)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+
     company = Company(
         name=request.name,
-        website_url=request.website_url,
+        website_url=website_url,
         owner_id=current_user.id,
     )
 
@@ -115,8 +138,13 @@ def update_company(
             detail="Company not found",
         )
 
+    try:
+        website_url = validate_website_url_syntax(request.website_url)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+
     company.name = request.name
-    company.website_url = request.website_url
+    company.website_url = website_url
 
     db.commit()
     db.refresh(company)
