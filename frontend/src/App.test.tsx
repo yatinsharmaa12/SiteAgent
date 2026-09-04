@@ -49,7 +49,7 @@ describe("account creation", () => {
   it("registers and signs the user in", async () => {
     const user = userEvent.setup();
     sessionStorage.clear();
-    vi.mocked(api.register).mockResolvedValue({ id: 9, email: "new@example.com" });
+    vi.mocked(api.register).mockResolvedValue({ message: "If this email is new, an account was created. Try signing in." });
     vi.mocked(api.login).mockResolvedValue({ access_token: "new-token" });
     render(<AuthProvider><MemoryRouter initialEntries={["/login"]}><App /></MemoryRouter></AuthProvider>);
     await user.click(screen.getByRole("link", { name: "Create one" }));

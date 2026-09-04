@@ -67,10 +67,15 @@ def register(
     )
 
     if existing_user:
-        raise HTTPException(
-            status_code=409,
-            detail="Email already registered",
-        )
+        # Generic response to prevent account enumeration (no 409 oracle).
+        # Burn similar time as creation so timing does not leak existence.
+        try:
+            hash_password(request.password)
+        except Exception:
+            pass
+        return {
+            "message": "If this email is new, an account was created. Try signing in.",
+        }
 
     user = User(
         email=request.email,
@@ -82,8 +87,7 @@ def register(
     db.refresh(user)
 
     return {
-        "id": user.id,
-        "email": user.email,
+        "message": "If this email is new, an account was created. Try signing in.",
     }
 
 @router.post("/login")
